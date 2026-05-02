@@ -70,6 +70,9 @@
         .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .spending-row { display: grid; grid-template-columns: 90px 90px 1fr; gap: 8px; }
         .spending-row label { white-space: nowrap; }
+        .segmented-toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+        .segmented-toggle button { margin: 0; border: none; border-radius: 0; padding: 8px; background: #f8fafc; color: #334155; font-size: 0.9rem; }
+        .segmented-toggle button.active { background: #0f766e; color: #fff; }
         .form-group { margin-bottom: 12px; }
         
         label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
@@ -145,24 +148,32 @@
                 <h4>Basic Info & Taxes</h4>
                 <div class="form-row">
                     <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
-                    <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
+                    <div class="form-group"><label title="How long the plan should last. The simulation runs from your current age to this age.">Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
                 </div>
                 <div class="form-row">
+                    <div class="form-group" id="spendingInputGroup">
+                        <label id="spendingLabel">Desired Net Spend/Yr</label>
+                        <input type="number" id="spending" value="60000">
+                    </div>
                     <div class="form-group">
                         <label>Spending Mode</label>
-                        <select id="spendingMode">
-                            <option value="input" selected>Use my spending input</option>
-                            <option value="solve">Solve sustainable spending</option>
-                        </select>
+                        <div class="segmented-toggle" id="spendingModeToggle">
+                            <button type="button" data-mode="input" class="active">Desired</button>
+                            <button type="button" data-mode="solve">Sustainable</button>
+                        </div>
+                        <input type="hidden" id="spendingMode" value="input">
+                        <div id="spendingModeHelp" style="margin-top:6px; font-size:0.8rem; color:#64748b;">Uses your entered spend.</div>
                     </div>
-                    <div class="form-group"><label>Target MC Success (%)</label><input type="number" id="targetSuccess" value="90" min="50" max="99" step="1"></div>
+                    <div class="form-group" id="targetSuccessGroup"><label>Target MC Success (%)</label><input type="number" id="targetSuccess" value="90" min="50" max="99" step="1"></div>
                 </div>
-                <div class="form-group"><label>Solve Precision ($)</label><input type="number" id="solvePrecision" value="100" min="10" max="5000" step="10"></div>
-                <div class="form-group"><label title="How long the plan should last. The simulation runs from your current age to this age.">Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
+                <div class="form-group" id="solvePrecisionGroup"><label>Solve Precision ($)</label><input type="number" id="solvePrecision" value="1000" min="100" max="5000" step="100"></div>
                 <div class="form-group" style="margin-top: 6px;">
                     <label title="Set different spending targets for different age ranges. If an age is not covered, the default Desired Net Spend/Yr is used.">Optional Spending Schedule (today's dollars)</label>
+                    <div id="spendingScheduleContainer">
                     <div id="spendingScheduleRows" style="display:flex; flex-direction:column; gap:8px;"></div>
                     <button type="button" id="addSpendingRow" style="margin-top:8px; padding:8px; font-size:0.9rem;">Add Spending Phase</button>
+                    </div>
+                    <div id="spendingScheduleSolveNote" style="display:none; margin-top:6px; font-size:0.8rem; color:#64748b;">Spending schedule is disabled in solve mode (solver uses one flat annual spend).</div>
                     <div id="spendingScheduleStatus" style="margin-top:6px; font-size:0.8rem; color:#64748b;"></div>
                 </div>
                 <div class="form-row">
@@ -275,6 +286,7 @@
                     <div style="font-size:0.8rem; color:#64748b;">Annual inflation shocks are allowed down to -3% and capped at 20%.</div>
                     <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Return volatility guide: Conservative ~6%, Balanced ~10-12%, Aggressive ~16-18%.</div>
                     <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Inflation volatility guide: Stable ~1.0%, Typical ~1.5%, Stress ~2.5%.</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Seed guide: leave blank for a fresh random run each time; use a fixed seed to reproduce the same result.</div>
                 </div>
             </div>
 
@@ -372,6 +384,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastMonteCarloMeta = null;
     let mcCancelRequested = false;
     let mcIsRunning = false;
+    let desiredSpendBeforeSolve = null;
+    let lastSolvedSpend = null;
 
     const inputIds =[
         'displayMode', 'debugMode', 'age', 'spending', 'spendingMode', 'targetSuccess', 'solvePrecision', 'lifeExpectancy', 'inflation', 'growth', 'province',
@@ -1125,6 +1139,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (solved !== null) {
                     baseSpending = solved;
                     solvedSpendOutput = solved;
+                    lastSolvedSpend = solved;
+                    const spendingEl = document.getElementById('spending');
+                    if (spendingEl) spendingEl.value = Math.round(solved);
                 }
             }
         }
@@ -1649,6 +1666,69 @@ document.addEventListener("DOMContentLoaded", () => {
         if (box) box.style.display = enabled ? 'block' : 'none';
     }
 
+    function updateSpendingModeVisibility() {
+        const mode = document.getElementById('spendingMode').value;
+        const targetEl = document.getElementById('targetSuccessGroup');
+        const precisionEl = document.getElementById('solvePrecisionGroup');
+        const scheduleWrap = document.getElementById('spendingScheduleContainer');
+        const scheduleNote = document.getElementById('spendingScheduleSolveNote');
+        const scheduleStatus = document.getElementById('spendingScheduleStatus');
+        const spendingInput = document.getElementById('spending');
+        const spendingLabel = document.getElementById('spendingLabel');
+        const spendingInputGroup = document.getElementById('spendingInputGroup');
+        const spendingHelp = document.getElementById('spendingModeHelp');
+        const toggle = document.getElementById('spendingModeToggle');
+        const visible = mode === 'solve';
+
+        if (toggle) {
+            toggle.querySelectorAll('button[data-mode]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+        }
+
+        if (targetEl) targetEl.style.display = visible ? 'block' : 'none';
+        if (precisionEl) precisionEl.style.display = visible ? 'block' : 'none';
+        if (scheduleWrap) scheduleWrap.style.display = visible ? 'none' : 'block';
+        if (scheduleNote) scheduleNote.style.display = visible ? 'block' : 'none';
+        if (scheduleStatus) scheduleStatus.style.display = visible ? 'none' : 'block';
+        if (spendingInput) {
+            spendingInput.readOnly = visible;
+            spendingInput.style.backgroundColor = visible ? '#f1f5f9' : '#fff';
+            spendingInput.style.cursor = visible ? 'not-allowed' : 'text';
+        }
+        if (spendingLabel) spendingLabel.innerText = visible ? 'Solved Net Spend/Yr' : 'Desired Net Spend/Yr';
+        if (spendingInputGroup) spendingInputGroup.style.opacity = visible ? '0.9' : '1';
+        if (spendingHelp) spendingHelp.innerText = visible ? 'Solves a flat spend to hit your MC success target.' : 'Uses your entered spend.';
+    }
+
+    function replaceWithFlatScheduleFromCurrentSpend(spendOverride = null) {
+        const container = document.getElementById('spendingScheduleRows');
+        if (!container) return;
+        const currentAge = parseInt(document.getElementById('age').value) || 60;
+        const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
+        const spend = Number.isFinite(spendOverride) ? spendOverride : (parseFloat(document.getElementById('spending').value) || 0);
+        container.innerHTML = '';
+        container.appendChild(createSpendingScheduleRow(currentAge, lifeExpectancy, Math.round(spend)));
+        saveSpendingSchedule();
+    }
+
+    function scheduleDiffersFromFlatCurrentSpend(spendOverride = null) {
+        const rows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row'));
+        const currentAge = parseInt(document.getElementById('age').value) || 60;
+        const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
+        const spend = Math.round(Number.isFinite(spendOverride) ? spendOverride : (parseFloat(document.getElementById('spending').value) || 0));
+
+        if (rows.length !== 1) return true;
+
+        const row = rows[0];
+        const start = parseInt(row.querySelector('.sched-start').value);
+        const end = parseInt(row.querySelector('.sched-end').value);
+        const amount = Math.round(parseFloat(row.querySelector('.sched-amount').value) || 0);
+
+        if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(amount)) return true;
+        return !(start === currentAge && end === lifeExpectancy && amount === spend);
+    }
+
     function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy, effectiveStrategy) {
         const displayInflated = document.getElementById('displayMode').checked;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
@@ -1909,6 +1989,47 @@ document.addEventListener("DOMContentLoaded", () => {
     loadInputs();
     loadSpendingSchedule();
     updateMonteCarloSettingsVisibility();
+    updateSpendingModeVisibility();
+
+    const spendingModeToggle = document.getElementById('spendingModeToggle');
+    if (spendingModeToggle) {
+        spendingModeToggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-mode]');
+            if (!btn) return;
+            const modeInput = document.getElementById('spendingMode');
+            if (!modeInput) return;
+            const prevMode = modeInput.value;
+            modeInput.value = btn.dataset.mode;
+
+            if (prevMode === 'input' && modeInput.value === 'solve') {
+                const spendEl = document.getElementById('spending');
+                const val = spendEl ? parseFloat(spendEl.value) : NaN;
+                desiredSpendBeforeSolve = Number.isFinite(val) ? val : desiredSpendBeforeSolve;
+            }
+
+            if (prevMode === 'solve' && modeInput.value === 'input') {
+                const spendEl = document.getElementById('spending');
+                const solvedSpend = Number.isFinite(lastSolvedSpend) ? lastSolvedSpend : (parseFloat(spendEl?.value) || 0);
+                const desiredSpend = Number.isFinite(desiredSpendBeforeSolve) ? desiredSpendBeforeSolve : solvedSpend;
+
+                if (spendEl && Number.isFinite(solvedSpend) && Math.round(desiredSpend) !== Math.round(solvedSpend)) {
+                    const applySolvedEverywhere = window.confirm('Your previous desired spend differs from the solved spend.\n\nDo you want to update BOTH Desired Net Spend/Yr and the spending schedule to the solved value for a like-for-like comparison?');
+                    if (applySolvedEverywhere) {
+                        spendEl.value = Math.round(solvedSpend);
+                        replaceWithFlatScheduleFromCurrentSpend(solvedSpend);
+                    } else {
+                        spendEl.value = Math.round(desiredSpend);
+                    }
+                } else if (spendEl) {
+                    spendEl.value = Math.round(desiredSpend);
+                }
+            }
+
+            updateSpendingModeVisibility();
+            saveInputs();
+            recalculateForUiChange();
+        });
+    }
 
     const schedContainer = document.getElementById('spendingScheduleRows');
     const addSchedBtn = document.getElementById('addSpendingRow');
@@ -1954,6 +2075,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const el = document.getElementById(id);
         if(el) el.addEventListener('change', () => {
             if (id === 'enableMonteCarlo') updateMonteCarloSettingsVisibility();
+            if (id === 'spendingMode') updateSpendingModeVisibility();
             if (id === 'age' || id === 'spending' || id === 'lifeExpectancy') {
                 const rows = document.querySelectorAll('#spendingScheduleRows .spending-row');
                 if (rows.length === 1) {
