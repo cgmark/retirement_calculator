@@ -140,14 +140,6 @@
                         <option value="nominal">Future Dollars (Nominal/Inflated)</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Diagnostics</label>
-                    <select id="debugMode">
-                        <option value="off" selected>Off</option>
-                        <option value="on">Show Debug Summary</option>
-                        <option value="table">Show Debug Table</option>
-                    </select>
-                </div>
             </div>
             
             <div class="input-section">
@@ -219,6 +211,23 @@
             </div>
 
             <div class="input-section">
+                <h4>RRIF Minimum Withdrawals</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>RRIF Start Age</label>
+                        <input type="number" id="rrifStartAge" value="71" min="55" max="95">
+                    </div>
+                    <div class="form-group">
+                        <label>Apply RRIF Minimums</label>
+                        <select id="enforceRrifMin">
+                            <option value="yes" selected>Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-section">
                 <h4>Withdrawal Strategy Waterfall</h4>
                 <div class="form-group">
                     <select id="strategy">
@@ -232,6 +241,14 @@
             </div>
 
             <button id="calcBtn">Run Simulation</button>
+            <div class="form-group" style="margin-top:10px; margin-bottom:0; opacity:0.8;">
+                <label style="font-size:0.75rem; color:#64748b;">Advanced: Diagnostics</label>
+                <select id="debugMode" style="font-size:0.85rem; padding:6px;">
+                    <option value="off" selected>Off</option>
+                    <option value="on">Show Debug Summary</option>
+                    <option value="table">Show Debug Table</option>
+                </select>
+            </div>
         </div>
 
         <!-- Charts Column -->
@@ -299,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const inputIds =[
         'displayMode', 'debugMode', 'age', 'spending', 'inflation', 'growth', 'province',
         'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
-        'cppScenario', 'oasPercent', 'strategy'
+        'cppScenario', 'oasPercent', 'rrifStartAge', 'enforceRrifMin', 'strategy'
     ];
 
     const formatCurrency = (num) => {
@@ -523,6 +540,19 @@ document.addEventListener("DOMContentLoaded", () => {
         return { gross: finalGross, net: finalGross - finalTax, tax: finalTax, taxableAdd: finalTaxAdd };
     }
 
+    function getRrifMinimumRate(age) {
+        if (age < 71) return 0;
+        const rates = {
+            71: 0.0528, 72: 0.0540, 73: 0.0553, 74: 0.0567, 75: 0.0582,
+            76: 0.0598, 77: 0.0617, 78: 0.0636, 79: 0.0658, 80: 0.0682,
+            81: 0.0708, 82: 0.0738, 83: 0.0771, 84: 0.0808, 85: 0.0851,
+            86: 0.0899, 87: 0.0955, 88: 0.1021, 89: 0.1099, 90: 0.1192,
+            91: 0.1306, 92: 0.1449, 93: 0.1634, 94: 0.1879
+        };
+        if (age >= 95) return 0.20;
+        return rates[age] || 0;
+    }
+
     function calculateRetirement() {
         saveInputs();
 
@@ -546,6 +576,8 @@ document.addEventListener("DOMContentLoaded", () => {
                                  parseFloat(document.getElementById('cpp65').value);
 
         const oasPercent = parseFloat(document.getElementById('oasPercent').value) / 100;
+        const rrifStartAge = parseInt(document.getElementById('rrifStartAge').value);
+        const enforceRrifMin = document.getElementById('enforceRrifMin').value === 'yes';
         const strategy = document.getElementById('strategy').value;
 
         const results =[];
@@ -559,6 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let totalIncomeTaxThisYear = 0;
             let oasClawbackThisYear = 0;
+            let mandatoryRrifDrawThisYear = 0;
             let debugClawbackIterations = 0;
             let debugFinalTaxableIncome = 0;
 
@@ -576,6 +609,22 @@ document.addEventListener("DOMContentLoaded", () => {
             let baseTax = calculateTax(currentTaxableIncome, provCode, inflationFactor);
             totalIncomeTaxThisYear += baseTax;
             let netGovIncome = currentTaxableIncome - baseTax;
+
+            if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
+                const rrifMinRate = getRrifMinimumRate(currentAge);
+                if (rrifMinRate > 0) {
+                    const mandatoryGross = Math.min(rrsp, rrsp * rrifMinRate);
+                    const mandatoryTax = calculateTax(currentTaxableIncome + mandatoryGross, provCode, inflationFactor) - calculateTax(currentTaxableIncome, provCode, inflationFactor);
+                    const mandatoryNet = mandatoryGross - mandatoryTax;
+
+                    rrsp -= mandatoryGross;
+                    drawRRSP += mandatoryGross;
+                    mandatoryRrifDrawThisYear += mandatoryGross;
+                    currentTaxableIncome += mandatoryGross;
+                    totalIncomeTaxThisYear += mandatoryTax;
+                    netGovIncome += mandatoryNet;
+                }
+            }
             
             netNeeded = Math.max(0, targetSpending - netGovIncome);
 
@@ -720,6 +769,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 total: totalAssets,
                 incomeTax: totalIncomeTaxThisYear,
                 oasClawback: oasClawbackThisYear,
+                mandatoryRrifDraw: mandatoryRrifDrawThisYear,
                 netShortfall: netNeeded,
                 taxableIncome: debugFinalTaxableIncome,
                 clawbackIterations: debugClawbackIterations,
@@ -818,12 +868,16 @@ document.addEventListener("DOMContentLoaded", () => {
             let maxShortfall = 0;
             let maxClawbackIterations = 0;
             let yearsWithClawback = 0;
+            let yearsWithMandatoryRrif = 0;
+            let totalMandatoryRrif = 0;
 
             results.forEach(r => {
                 if (r.taxableIncome > maxTaxable) maxTaxable = r.taxableIncome;
                 if (r.netShortfall > maxShortfall) maxShortfall = r.netShortfall;
                 if (r.clawbackIterations > maxClawbackIterations) maxClawbackIterations = r.clawbackIterations;
                 if (r.oasClawback > 0) yearsWithClawback++;
+                if (r.mandatoryRrifDraw > 0) yearsWithMandatoryRrif++;
+                totalMandatoryRrif += adj(r.mandatoryRrifDraw, r.yearIndex);
             });
 
             const finalRowDebug = results[results.length - 1];
@@ -831,6 +885,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 `<strong>Debug Summary:</strong>`,
                 `Max taxable income in any year: ${formatCurrency(adj(maxTaxable, 0))}`,
                 `Years with OAS clawback: ${yearsWithClawback}`,
+                `Years with mandatory RRIF draw: ${yearsWithMandatoryRrif}`,
+                `Total mandatory RRIF draw: ${formatCurrency(totalMandatoryRrif)}`,
                 `Max OAS clawback iterations used in a year: ${maxClawbackIterations}`,
                 `Ending-year unmet net need: ${formatCurrency(adj(finalRowDebug.netShortfall, finalRowDebug.yearIndex))}`,
                 `Max unmet net need in any year: ${formatCurrency(adj(maxShortfall, 0))}`
@@ -841,6 +897,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <tr>
                         <td style="text-align:center;">${r.age}</td>
                         <td>${formatCurrency(adj(r.taxableIncome, r.yearIndex))}</td>
+                        <td>${formatCurrency(adj(r.mandatoryRrifDraw, r.yearIndex))}</td>
                         <td>${formatCurrency(adj(r.oasClawback, r.yearIndex))}</td>
                         <td style="text-align:center;">${r.clawbackIterations}</td>
                         <td>${formatCurrency(adj(r.netShortfall, r.yearIndex))}</td>
@@ -853,6 +910,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     `<thead><tr>` +
                     `<th style="text-align:center; border-bottom:1px solid #cbd5e1; padding:6px;">Age</th>` +
                     `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">Taxable Income</th>` +
+                    `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">RRIF Min Draw</th>` +
                     `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">OAS Clawback</th>` +
                     `<th style="text-align:center; border-bottom:1px solid #cbd5e1; padding:6px;">Iterations</th>` +
                     `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">Unmet Net Need</th>` +
