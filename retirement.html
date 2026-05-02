@@ -328,6 +328,12 @@
                 <div class="chart-wrapper"><canvas id="mcOutcomeChart"></canvas></div>
             </div>
 
+            <div class="card" id="mcPercentileCard" style="display:none;">
+                <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem;">Monte Carlo Asset Percentiles Over Time</h3>
+                <div id="mcPercentileSubtitle" style="font-size:0.82rem; color:#64748b; margin-bottom:10px;"></div>
+                <div class="chart-wrapper"><canvas id="mcPercentileChart"></canvas></div>
+            </div>
+
             <!-- Summary Box -->
             <div class="card">
                 <h3 style="margin-top: 0; margin-bottom: 15px;">Lifetime Summary Totals <span id="summarySubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
@@ -380,6 +386,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
     let incomeChartInst = null;
     let mcOutcomeChartInst = null;
+    let mcPercentileChartInst = null;
     let lastMonteCarloResults = null;
     let lastMonteCarloMeta = null;
     let mcCancelRequested = false;
@@ -712,6 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
         let totalClawback = 0;
         const finalEstates = [];
         const depletionAges = [];
+        const yearsCount = Math.max(1, projectionAge - age + 1);
+        const ageLabels = Array.from({ length: yearsCount }, (_, i) => age + i);
+        const assetsByYear = Array.from({ length: yearsCount }, () => []);
         const successBucketLabel = `${projectionAge}+ (Success)`;
         const bucketLabels = ['Before 65', '65-69', '70-74', '75-79', '80-84', '85-89', '90-94', '95-99', successBucketLabel];
         const bucketCounts = Object.fromEntries(bucketLabels.map(b => [b, 0]));
@@ -733,6 +743,7 @@ document.addEventListener("DOMContentLoaded", () => {
             let thisTax = 0;
             let thisClawback = 0;
             let mcInflationFactor = 1;
+            const yearlyAssets = new Array(yearsCount).fill(0);
 
             for (let i = 0; age + i <= projectionAge; i++) {
                 const currentAge = age + i;
@@ -880,6 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 thisTax += totalIncomeTaxThisYear;
                 thisClawback += oasClawbackThisYear;
+                yearlyAssets[i] = rrsp + tfsa + nonreg;
 
                 finalAge = currentAge;
                 if (netNeeded > 1) {
@@ -909,10 +921,25 @@ document.addEventListener("DOMContentLoaded", () => {
             finalEstates.push(rrsp + tfsa + nonreg);
             totalTax += thisTax;
             totalClawback += thisClawback;
+            for (let i = 0; i < yearsCount; i++) assetsByYear[i].push(yearlyAssets[i]);
             completedTrials++;
 
             if ((t + 1) % chunkSize === 0 || t === trials - 1) {
-                if (typeof onProgress === 'function') onProgress(completedTrials, trials, bucketLabels, { ...bucketCounts });
+                if (typeof onProgress === 'function') {
+                    const partialP10 = assetsByYear.map(v => percentile(v, 10));
+                    const partialP50 = assetsByYear.map(v => percentile(v, 50));
+                    const partialP90 = assetsByYear.map(v => percentile(v, 90));
+                    onProgress(
+                        completedTrials,
+                        trials,
+                        bucketLabels,
+                        { ...bucketCounts },
+                        ageLabels,
+                        partialP10,
+                        partialP50,
+                        partialP90
+                    );
+                }
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
@@ -930,9 +957,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 medianDepletionAge: null,
                 cancelled,
                 bucketLabels,
-                bucketCounts
+                bucketCounts,
+                ageLabels,
+                assetP10: [],
+                assetP50: [],
+                assetP90: []
             };
         }
+
+        const assetP10 = assetsByYear.map(v => percentile(v, 10));
+        const assetP50 = assetsByYear.map(v => percentile(v, 50));
+        const assetP90 = assetsByYear.map(v => percentile(v, 90));
 
         return {
             trials: completedTrials,
@@ -946,7 +981,11 @@ document.addEventListener("DOMContentLoaded", () => {
             medianDepletionAge: depletionAges.length ? percentile(depletionAges, 50) : null,
             cancelled,
             bucketLabels,
-            bucketCounts
+            bucketCounts,
+            ageLabels,
+            assetP10,
+            assetP50,
+            assetP90
         };
     }
 
@@ -1049,6 +1088,98 @@ document.addEventListener("DOMContentLoaded", () => {
         mcOutcomeChartInst.data.datasets[0].backgroundColor = bucketLabels.map(l => l.includes('(Success)') ? '#16a34a' : '#f59e0b');
         mcOutcomeChartInst.options.plugins.tooltip.callbacks.label = (ctx) => `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`;
         mcOutcomeChartInst.update('none');
+    }
+
+    function renderMonteCarloPercentileChart(monteCarloResults) {
+        const card = document.getElementById('mcPercentileCard');
+        const subtitle = document.getElementById('mcPercentileSubtitle');
+        if (!card || !subtitle) return;
+
+        if (!monteCarloResults || !monteCarloResults.trials || !monteCarloResults.ageLabels?.length) {
+            if (mcPercentileChartInst) {
+                mcPercentileChartInst.destroy();
+                mcPercentileChartInst = null;
+            }
+            card.style.display = 'none';
+            subtitle.innerText = '';
+            return;
+        }
+
+        card.style.display = 'block';
+        const displayInflated = document.getElementById('displayMode').checked;
+        const baseInflation = parseFloat(document.getElementById('inflation').value) / 100;
+        subtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? ' (partial run)' : ''}. P10 means 10% of paths were below this level. Values shown in ${displayInflated ? 'inflated/nominal' : "today's"} dollars.`;
+
+        const labels = monteCarloResults.ageLabels;
+        const adjustSeries = (series) => (series || []).map((v, idx) => {
+            if (displayInflated) return v;
+            return v / Math.pow(1 + baseInflation, idx);
+        });
+        const p10 = adjustSeries(monteCarloResults.assetP10);
+        const p50 = adjustSeries(monteCarloResults.assetP50);
+        const p90 = adjustSeries(monteCarloResults.assetP90);
+
+        const data = {
+            labels,
+            datasets: [
+                {
+                    label: 'P10',
+                    data: p10,
+                    borderColor: '#f59e0b',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false
+                },
+                {
+                    label: 'P50',
+                    data: p50,
+                    borderColor: '#0f766e',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    fill: false
+                },
+                {
+                    label: 'P90',
+                    data: p90,
+                    borderColor: '#2563eb',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: '-1',
+                    backgroundColor: 'rgba(37,99,235,0.12)'
+                }
+            ]
+        };
+
+        const options = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(ctx.parsed.y)}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: { callback: (v) => '$' + Number(v).toLocaleString() }
+                }
+            }
+        };
+
+        if (!mcPercentileChartInst) {
+            mcPercentileChartInst = new Chart(document.getElementById('mcPercentileChart').getContext('2d'), {
+                type: 'line',
+                data,
+                options
+            });
+            return;
+        }
+
+        mcPercentileChartInst.data = data;
+        mcPercentileChartInst.options = options;
+        mcPercentileChartInst.update('none');
     }
 
     async function calculateRetirement(runMonteCarloNow = true) {
@@ -1595,18 +1726,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     volatility: mcVolatility,
                     inflationVolatility: mcInflationVolatility,
                     seed: mcSeed,
-                    onProgress: (done, total, bucketLabels, bucketCounts) => {
+                    onProgress: (done, total, bucketLabels, bucketCounts, ageLabels, assetP10, assetP50, assetP90) => {
                         if (runStatusEl) {
                             const pct = ((done / total) * 100).toFixed(0);
                             runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
                         }
-                        renderMonteCarloOutcomeChart({
+                        const partialResults = {
                             trials: done,
                             requestedTrials: total,
                             cancelled: false,
                             bucketLabels,
-                            bucketCounts
-                        });
+                            bucketCounts,
+                            ageLabels,
+                            assetP10,
+                            assetP50,
+                            assetP90
+                        };
+                        renderMonteCarloOutcomeChart(partialResults);
+                        renderMonteCarloPercentileChart(partialResults);
                     },
                     shouldCancel: () => mcCancelRequested
                 });
@@ -1860,8 +1997,13 @@ document.addEventListener("DOMContentLoaded", () => {
             mcEl.innerHTML = '';
         }
 
-        if (monteCarloEnabled) renderMonteCarloOutcomeChart(monteCarloResults);
-        else renderMonteCarloOutcomeChart(null);
+        if (monteCarloEnabled) {
+            renderMonteCarloOutcomeChart(monteCarloResults);
+            renderMonteCarloPercentileChart(monteCarloResults);
+        } else {
+            renderMonteCarloOutcomeChart(null);
+            renderMonteCarloPercentileChart(null);
+        }
 
         const debugMode = document.getElementById('debugMode').value;
         const debugEl = document.getElementById('debugSummary');
