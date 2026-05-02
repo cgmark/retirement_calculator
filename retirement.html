@@ -40,6 +40,9 @@
             margin-bottom: 20px;
         }
 
+        .inputs-column { display: flex; flex-direction: column; gap: 12px; }
+        .run-controls-card { position: sticky; top: 12px; z-index: 20; }
+
         .card {
             background: var(--card-bg);
             padding: 20px;
@@ -128,26 +131,33 @@
     
     <div class="dashboard">
         <!-- Inputs Column -->
+        <div class="inputs-column">
+        <div class="card run-controls-card" style="padding: 14px;">
+            <button id="calcBtn" style="margin-top:0;">Run Simulation</button>
+            <button id="stopBtn" type="button" style="display:none; margin-top:6px; background:#b91c1c;">Stop Simulation</button>
+            <div id="runStatus" style="margin-top:8px; min-height:18px; font-size:0.82rem; color:#475569;"></div>
+        </div>
         <div class="card" style="overflow-y: auto; max-height: 980px;">
             <h3>Simulation Parameters</h3>
 
-            <div class="input-section" style="background: #e0f2fe; border: 1px solid #bae6fd;">
-                <h4>Display Options</h4>
-                <div class="form-group">
-                    <label>Currency Display Format</label>
-                    <select id="displayMode">
-                        <option value="real" selected>Today's Dollars (Inflation discounted)</option>
-                        <option value="nominal">Future Dollars (Nominal/Inflated)</option>
-                    </select>
-                </div>
-            </div>
-            
+
             <div class="input-section">
                 <h4>Basic Info & Taxes</h4>
                 <div class="form-row">
                     <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
                     <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Spending Mode</label>
+                        <select id="spendingMode">
+                            <option value="input" selected>Use my spending input</option>
+                            <option value="solve">Solve sustainable spending</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Target MC Success (%)</label><input type="number" id="targetSuccess" value="90" min="50" max="99" step="1"></div>
+                </div>
+                <div class="form-group"><label>Solve Precision ($)</label><input type="number" id="solvePrecision" value="100" min="10" max="5000" step="10"></div>
                 <div class="form-group"><label title="How long the plan should last. The simulation runs from your current age to this age.">Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
                 <div class="form-group" style="margin-top: 6px;">
                     <label title="Set different spending targets for different age ranges. If an age is not covered, the default Desired Net Spend/Yr is used.">Optional Spending Schedule (today's dollars)</label>
@@ -264,9 +274,16 @@
                 </div>
             </div>
 
-            <button id="calcBtn">Run Simulation</button>
-            <button id="stopBtn" type="button" style="display:none; margin-top:6px; background:#b91c1c;">Stop Simulation</button>
-            <div id="runStatus" style="margin-top:8px; min-height:18px; font-size:0.82rem; color:#475569;"></div>
+            <div class="input-section" style="background: #e0f2fe; border: 1px solid #bae6fd;">
+                <h4>Display Options</h4>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+                        <input type="checkbox" id="displayMode" style="width:auto;">
+                        Future (inflated) dollars
+                    </label>
+                </div>
+            </div>
+
             <div class="form-group" style="margin-top:10px; margin-bottom:0; opacity:0.8;">
                 <label style="font-size:0.75rem; color:#64748b;">Advanced: Diagnostics</label>
                 <select id="debugMode" style="font-size:0.85rem; padding:6px;">
@@ -275,6 +292,7 @@
                     <option value="table">Show Debug Table</option>
                 </select>
             </div>
+        </div>
         </div>
 
         <!-- Charts Column -->
@@ -352,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let mcIsRunning = false;
 
     const inputIds =[
-        'displayMode', 'debugMode', 'age', 'spending', 'lifeExpectancy', 'inflation', 'growth', 'province',
+        'displayMode', 'debugMode', 'age', 'spending', 'spendingMode', 'targetSuccess', 'solvePrecision', 'lifeExpectancy', 'inflation', 'growth', 'province',
         'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
         'cppScenario', 'oasPercent', 'rrifStartAge', 'enforceRrifMin', 'strategy',
         'enableMonteCarlo', 'mcTrials', 'mcVolatility', 'mcInflationVolatility', 'mcSeed'
@@ -890,6 +908,48 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
+    async function solveSustainableSpending(params) {
+        const {
+            targetSuccessRate,
+            precision,
+            maxIterations,
+            baselineSpend,
+            monteCarloParams,
+            onIteration,
+            shouldCancel
+        } = params;
+
+        let low = 0;
+        let high = Math.max(10000, baselineSpend || 60000);
+        const testTrials = Math.max(150, Math.min(400, Math.round((monteCarloParams.trials || 500) * 0.5)));
+
+        for (let expand = 0; expand < 8; expand++) {
+            const res = await runMonteCarlo({ ...monteCarloParams, trials: testTrials, baseSpending: high });
+            if (typeof onIteration === 'function') onIteration(`Bracketing at ${formatCurrency(high)} (${(res.successRate * 100).toFixed(1)}%)`);
+            if (typeof shouldCancel === 'function' && shouldCancel()) return null;
+            if (res.successRate < targetSuccessRate) break;
+            high *= 1.5;
+        }
+
+        let best = low;
+        for (let i = 0; i < maxIterations; i++) {
+            if (typeof shouldCancel === 'function' && shouldCancel()) return null;
+            const mid = (low + high) / 2;
+            const res = await runMonteCarlo({ ...monteCarloParams, trials: testTrials, baseSpending: mid });
+            if (typeof onIteration === 'function') onIteration(`Solve iter ${i + 1}/${maxIterations}: ${formatCurrency(mid)} -> ${(res.successRate * 100).toFixed(1)}%`);
+
+            if (res.successRate >= targetSuccessRate) {
+                best = mid;
+                low = mid;
+            } else {
+                high = mid;
+            }
+            if ((high - low) <= precision) break;
+        }
+
+        return best;
+    }
+
     function renderMonteCarloOutcomeChart(monteCarloResults) {
         const mcCard = document.getElementById('mcOutcomeCard');
         const mcSubtitle = document.getElementById('mcChartSubtitle');
@@ -963,8 +1023,11 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (currentAcb > nonreg) { currentAcb = nonreg; document.getElementById('nonregAcb').value = nonreg; }
 
-        const baseSpending = parseFloat(document.getElementById('spending').value);
+        let baseSpending = parseFloat(document.getElementById('spending').value);
         const spendingSchedule = getValidatedSpendingSchedule();
+        const spendingMode = document.getElementById('spendingMode').value;
+        const targetSuccessRate = Math.max(0.5, Math.min(0.99, (parseFloat(document.getElementById('targetSuccess').value) || 90) / 100));
+        const solvePrecision = Math.max(10, parseFloat(document.getElementById('solvePrecision').value) || 100);
         const lifeExpectancy = Math.max(age, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         const growth = parseFloat(document.getElementById('growth').value) / 100;
@@ -986,13 +1049,66 @@ document.addEventListener("DOMContentLoaded", () => {
         const mcSeedRaw = document.getElementById('mcSeed').value;
         const mcSeed = mcSeedRaw === '' ? NaN : parseInt(mcSeedRaw);
 
+        let solvedSpendOutput = null;
+
+        if (spendingMode === 'solve') {
+            if (!enableMonteCarlo) {
+                if (runStatusEl) {
+                    runStatusEl.style.color = '#b45309';
+                    runStatusEl.innerText = 'Enable Monte Carlo to solve sustainable spending.';
+                }
+            } else if (runMonteCarloNow) {
+                if (runStatusEl) {
+                    runStatusEl.style.color = '#0369a1';
+                    runStatusEl.innerText = 'Solving sustainable spending...';
+                }
+                const solved = await solveSustainableSpending({
+                    targetSuccessRate,
+                    precision: solvePrecision,
+                    maxIterations: 18,
+                    baselineSpend: baseSpending,
+                    monteCarloParams: {
+                        age,
+                        rrspStart: parseFloat(document.getElementById('rrsp').value),
+                        tfsaStart: parseFloat(document.getElementById('tfsa').value),
+                        nonregStart: parseFloat(document.getElementById('nonreg').value),
+                        acbStart: parseFloat(document.getElementById('nonregAcb').value),
+                        baseSpending,
+                        spendingSchedule: [],
+                        inflation,
+                        growth,
+                        provCode,
+                        cppScenarioAge,
+                        selectedCPPMonthly,
+                        oasPercent,
+                        rrifStartAge,
+                        enforceRrifMin,
+                        strategy,
+                        projectionAge: lifeExpectancy,
+                        trials: mcTrials,
+                        volatility: mcVolatility,
+                        inflationVolatility: mcInflationVolatility,
+                        seed: mcSeed,
+                        shouldCancel: () => mcCancelRequested
+                    },
+                    onIteration: (msg) => { if (runStatusEl) runStatusEl.innerText = msg; },
+                    shouldCancel: () => mcCancelRequested
+                });
+                if (solved !== null) {
+                    baseSpending = solved;
+                    solvedSpendOutput = solved;
+                }
+            }
+        }
+
+        const activeSchedule = spendingMode === 'solve' ? [] : spendingSchedule;
         const results =[];
         let isDepleted = false;
 
         for (let i = 0; age + i <= lifeExpectancy; i++) {
             let currentAge = age + i;
             let inflationFactor = Math.pow(1 + inflation, i);
-            let ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
+            let ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, activeSchedule);
             let targetSpending = ageBaseSpending * inflationFactor;
             
             let totalIncomeTaxThisYear = 0;
@@ -1209,7 +1325,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     nonregStart: parseFloat(document.getElementById('nonreg').value),
                     acbStart: parseFloat(document.getElementById('nonregAcb').value),
                     baseSpending,
-                    spendingSchedule,
+                    spendingSchedule: activeSchedule,
                     inflation,
                     growth,
                     provCode,
@@ -1281,7 +1397,7 @@ document.addEventListener("DOMContentLoaded", () => {
             runStatusEl.innerText = 'Deterministic mode ready.';
         }
 
-        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta);
+        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode);
     }
 
     function recalculateForUiChange() {
@@ -1295,13 +1411,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (box) box.style.display = enabled ? 'block' : 'none';
     }
 
-    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta) {
-        const displayMode = document.getElementById('displayMode').value;
+    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode) {
+        const displayInflated = document.getElementById('displayMode').checked;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         
-        const adj = (val, idx) => displayMode === 'real' ? val / Math.pow(1 + inflation, idx) : val;
+        const adj = (val, idx) => displayInflated ? val : val / Math.pow(1 + inflation, idx);
 
-        const strSuffix = displayMode === 'real' ? "(Today's Dollars)" : "(Inflated/Nominal Dollars)";
+        const strSuffix = displayInflated ? "(Inflated/Nominal Dollars)" : "(Today's Dollars)";
         const mcSuffix = monteCarloEnabled ? ' - Baseline Path' : '';
         document.getElementById('chart1Title').innerText = `Asset Balances Over Time ${strSuffix}${mcSuffix}`;
         document.getElementById('chart2Title').innerText = `Gross Income Sources vs Net Target ${strSuffix}${mcSuffix}`;
@@ -1381,6 +1497,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const seedText = monteCarloMeta && monteCarloMeta.seed !== null ? monteCarloMeta.seed : 'Random';
             const staleLine = monteCarloStale ? '<span style="color:#b45309; font-weight:600;">Results are from a previous run. Click Run Simulation to refresh.</span>' : '<span style="color:#166534;">Results are current with shown inputs.</span>';
             const partialLine = monteCarloResults.cancelled ? `<span style="color:#b45309; font-weight:600;">Partial run: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials completed.</span>` : '';
+            const solvedLine = (spendingMode === 'solve' && solvedSpendOutput) ? `Solved sustainable spend (today's dollars): ${formatCurrency(solvedSpendOutput)} at ${(targetSuccessRate * 100).toFixed(0)}% target success` : '';
             mcEl.innerHTML = [
                 '<strong>Monte Carlo Summary:</strong>',
                 `Trials completed: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()}`,
@@ -1391,6 +1508,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
                 `Last run: ${runAt}`,
                 `Settings used (trials / return vol / inflation vol / seed): ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
+                solvedLine,
                 partialLine,
                 staleLine
             ].join('<br>');
