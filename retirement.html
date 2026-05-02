@@ -248,6 +248,8 @@
                         <option value="nonreg-rrsp-tfsa">Preserve TFSA (Estate Planning: Non-Reg → RRSP → TFSA)</option>
                         <option value="rrsp-nonreg-tfsa">RRSP Meltdown (Clawback Prevention: RRSP → Non-Reg → TFSA)</option>
                         <option value="proportional">Proportional (Smooth Taxes: Draw from all evenly)</option>
+                        <option value="tax-efficient-auto">Tax-Efficient Auto (Adaptive)</option>
+                        <option value="optimized-lifetime">Optimized Lifetime (Tax + OAS, then Estate)</option>
                     </select>
                 </div>
             </div>
@@ -271,6 +273,8 @@
                         <div class="form-group"><label title="Use a fixed number to repeat the same random simulation results.">Seed (optional)</label><input type="number" id="mcSeed" value=""></div>
                     </div>
                     <div style="font-size:0.8rem; color:#64748b;">Annual inflation shocks are allowed down to -3% and capped at 20%.</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Return volatility guide: Conservative ~6%, Balanced ~10-12%, Aggressive ~16-18%.</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Inflation volatility guide: Stable ~1.0%, Typical ~1.5%, Stress ~2.5%.</div>
                 </div>
             </div>
 
@@ -802,6 +806,30 @@ document.addEventListener("DOMContentLoaded", () => {
                             executeDraw('nonreg', netNeeded * (nonreg / tot));
                             executeDraw('rrsp', netNeeded * (rrsp / tot));
                         }
+                    } else if (strategy === 'tax-efficient-auto') {
+                        const oasThreshold = 90997 * inflationFactor;
+                        const chunk = Math.max(250, 5000 * inflationFactor);
+                        for (let k = 0; k < 60 && netNeeded > 0.01; k++) {
+                            const candidates = [];
+                            if (tfsa > 0) candidates.push({ acc: 'tfsa', score: 0 });
+                            if (nonreg > 0) {
+                                const acbRatio = nonreg > 0.01 ? Math.min(currentAcb / nonreg, 1.0) : 1.0;
+                                const inclusionRate = (1 - acbRatio) * 0.50;
+                                const probe = findGrossDraw(Math.min(chunk, netNeeded), nonreg, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                                const projectedTaxable = currentTaxableIncome + probe.taxableAdd;
+                                const oasPenalty = currentAge >= 65 ? Math.max(0, projectedTaxable - oasThreshold) * 0.15 : 0;
+                                candidates.push({ acc: 'nonreg', score: probe.tax + oasPenalty });
+                            }
+                            if (rrsp > 0) {
+                                const probe = findGrossDraw(Math.min(chunk, netNeeded), rrsp, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                                const projectedTaxable = currentTaxableIncome + probe.taxableAdd;
+                                const oasPenalty = currentAge >= 65 ? Math.max(0, projectedTaxable - oasThreshold) * 0.15 : 0;
+                                candidates.push({ acc: 'rrsp', score: probe.tax + oasPenalty });
+                            }
+                            if (candidates.length === 0) break;
+                            candidates.sort((a, b) => a.score - b.score);
+                            executeDraw(candidates[0].acc, Math.min(chunk, netNeeded));
+                        }
                     } else {
                         const sequences = {
                             'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
@@ -1083,7 +1111,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         oasPercent,
                         rrifStartAge,
                         enforceRrifMin,
-                        strategy,
+                        strategy: strategy === 'optimized-lifetime' ? 'proportional' : strategy,
                         projectionAge: lifeExpectancy,
                         trials: mcTrials,
                         volatility: mcVolatility,
@@ -1102,6 +1130,192 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const activeSchedule = spendingMode === 'solve' ? [] : spendingSchedule;
+        const evaluateLifetimeObjective = (strategyChoice) => {
+            let rrspEval = parseFloat(document.getElementById('rrsp').value);
+            let tfsaEval = parseFloat(document.getElementById('tfsa').value);
+            let nonregEval = parseFloat(document.getElementById('nonreg').value);
+            let acbEval = Math.min(parseFloat(document.getElementById('nonregAcb').value), nonregEval);
+            let totalTaxEval = 0;
+            let totalClawbackEval = 0;
+            let depletedEval = false;
+
+            for (let i = 0; age + i <= lifeExpectancy; i++) {
+                const currentAge = age + i;
+                const inflationFactor = Math.pow(1 + inflation, i);
+                const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, activeSchedule);
+                const targetSpending = ageBaseSpending * inflationFactor;
+
+                let grossCPP = 0, grossOAS = 0;
+                if (currentAge >= cppScenarioAge) grossCPP = (selectedCPPMonthly * 12) * inflationFactor;
+                if (currentAge >= 65) {
+                    const baseOASMonthly = currentAge >= 75 ? 817.36 : 743.05;
+                    grossOAS = (baseOASMonthly * 12) * oasPercent * inflationFactor;
+                }
+
+                let currentTaxableIncome = grossCPP + grossOAS;
+                let totalIncomeTaxThisYear = calculateTax(currentTaxableIncome, provCode, inflationFactor);
+                let netGovIncome = currentTaxableIncome - totalIncomeTaxThisYear;
+
+                if (enforceRrifMin && currentAge >= rrifStartAge && rrspEval > 0) {
+                    const rrifMinRate = getRrifMinimumRate(currentAge);
+                    if (rrifMinRate > 0) {
+                        const mandatoryGross = Math.min(rrspEval, rrspEval * rrifMinRate);
+                        const mandatoryTax = calculateTax(currentTaxableIncome + mandatoryGross, provCode, inflationFactor) - calculateTax(currentTaxableIncome, provCode, inflationFactor);
+                        rrspEval -= mandatoryGross;
+                        currentTaxableIncome += mandatoryGross;
+                        totalIncomeTaxThisYear += mandatoryTax;
+                        netGovIncome += (mandatoryGross - mandatoryTax);
+                    }
+                }
+
+                let netNeeded = Math.max(0, targetSpending - netGovIncome);
+
+                const executeDrawEval = (accountType, targetNet) => {
+                    if (targetNet <= 0 || netNeeded <= 0) return;
+                    const amountToDraw = Math.min(targetNet, netNeeded);
+                    if (accountType === 'tfsa' && tfsaEval > 0) {
+                        const d = Math.min(tfsaEval, amountToDraw);
+                        tfsaEval -= d;
+                        netNeeded -= d;
+                    } else if (accountType === 'nonreg' && nonregEval > 0) {
+                        const acbRatio = nonregEval > 0.01 ? Math.min(acbEval / nonregEval, 1.0) : 1.0;
+                        const inclusionRate = (1 - acbRatio) * 0.50;
+                        const res = findGrossDraw(amountToDraw, nonregEval, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                        nonregEval -= res.gross;
+                        netNeeded -= res.net;
+                        totalIncomeTaxThisYear += res.tax;
+                        currentTaxableIncome += res.taxableAdd;
+                        acbEval -= (res.gross * acbRatio);
+                        if (acbEval < 0) acbEval = 0;
+                    } else if (accountType === 'rrsp' && rrspEval > 0) {
+                        const res = findGrossDraw(amountToDraw, rrspEval, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                        rrspEval -= res.gross;
+                        netNeeded -= res.net;
+                        totalIncomeTaxThisYear += res.tax;
+                        currentTaxableIncome += res.taxableAdd;
+                    }
+                };
+
+                let lowEval = 0, highEval = 50000 * inflationFactor;
+                for (let j = 0; j < 20; j++) {
+                    const mid = (lowEval + highEval) / 2;
+                    if (calculateTax(mid, provCode, inflationFactor) <= 0.01) lowEval = mid; else highEval = mid;
+                }
+                const rrspTaxFreeDraw = Math.min(rrspEval, Math.max(0, lowEval - currentTaxableIncome), netNeeded);
+                if (rrspTaxFreeDraw > 0) {
+                    rrspEval -= rrspTaxFreeDraw;
+                    netNeeded -= rrspTaxFreeDraw;
+                    currentTaxableIncome += rrspTaxFreeDraw;
+                }
+
+                const executeByStrategyEval = (targetNet) => {
+                    if (targetNet <= 0 || netNeeded <= 0) return;
+                    if (strategyChoice === 'proportional') {
+                        for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
+                            const tot = rrspEval + tfsaEval + nonregEval;
+                            if (tot <= 0) break;
+                            executeDrawEval('tfsa', netNeeded * (tfsaEval / tot));
+                            executeDrawEval('nonreg', netNeeded * (nonregEval / tot));
+                            executeDrawEval('rrsp', netNeeded * (rrspEval / tot));
+                        }
+                    } else if (strategyChoice === 'tax-efficient-auto') {
+                        const oasThreshold = 90997 * inflationFactor;
+                        const chunk = Math.max(250, 5000 * inflationFactor);
+                        for (let k = 0; k < 60 && netNeeded > 0.01; k++) {
+                            const candidates = [];
+                            if (tfsaEval > 0) candidates.push({ acc: 'tfsa', score: 0 });
+                            if (nonregEval > 0) {
+                                const acbRatio = nonregEval > 0.01 ? Math.min(acbEval / nonregEval, 1.0) : 1.0;
+                                const inclusionRate = (1 - acbRatio) * 0.50;
+                                const probe = findGrossDraw(Math.min(chunk, netNeeded), nonregEval, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                                const oasPenalty = currentAge >= 65 ? Math.max(0, currentTaxableIncome + probe.taxableAdd - oasThreshold) * 0.15 : 0;
+                                candidates.push({ acc: 'nonreg', score: probe.tax + oasPenalty });
+                            }
+                            if (rrspEval > 0) {
+                                const probe = findGrossDraw(Math.min(chunk, netNeeded), rrspEval, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                                const oasPenalty = currentAge >= 65 ? Math.max(0, currentTaxableIncome + probe.taxableAdd - oasThreshold) * 0.15 : 0;
+                                candidates.push({ acc: 'rrsp', score: probe.tax + oasPenalty });
+                            }
+                            if (!candidates.length) break;
+                            candidates.sort((a, b) => a.score - b.score);
+                            executeDrawEval(candidates[0].acc, Math.min(chunk, netNeeded));
+                        }
+                    } else {
+                        const sequences = {
+                            'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                            'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                            'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                            'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                        };
+                        sequences[strategyChoice].forEach(acc => executeDrawEval(acc, targetNet));
+                    }
+                };
+
+                executeByStrategyEval(netNeeded);
+                if (strategyChoice !== 'proportional' && strategyChoice !== 'tax-efficient-auto' && netNeeded > 0.01) {
+                    const sequences = {
+                        'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                        'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                        'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                        'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                    };
+                    sequences[strategyChoice].forEach(acc => executeDrawEval(acc, netNeeded));
+                }
+
+                if (grossOAS > 0) {
+                    const oasThreshold = 90997 * inflationFactor;
+                    let prevClawback = 0;
+                    for (let k = 0; k < 10; k++) {
+                        let clawback = 0;
+                        if (currentTaxableIncome > oasThreshold) clawback = (currentTaxableIncome - oasThreshold) * 0.15;
+                        clawback = Math.min(clawback, grossOAS);
+                        const delta = clawback - prevClawback;
+                        if (delta <= 0.01) break;
+                        netNeeded = delta;
+                        executeByStrategyEval(netNeeded);
+                        if (netNeeded > 0.01) break;
+                        prevClawback = clawback;
+                    }
+                    totalClawbackEval += Math.min(Math.max(0, (currentTaxableIncome - oasThreshold) * 0.15), grossOAS);
+                }
+
+                totalTaxEval += totalIncomeTaxThisYear;
+                if (netNeeded > 1) { depletedEval = true; break; }
+
+                rrspEval *= (1 + growth);
+                tfsaEval *= (1 + growth);
+                nonregEval *= (1 + growth);
+            }
+
+            return {
+                strategy: strategyChoice,
+                objective: totalTaxEval + totalClawbackEval,
+                totalTax: totalTaxEval,
+                totalClawback: totalClawbackEval,
+                finalEstate: rrspEval + tfsaEval + nonregEval,
+                depleted: depletedEval
+            };
+        };
+
+        let effectiveStrategy = strategy;
+        if (strategy === 'optimized-lifetime') {
+            const candidateStrategies = [
+                'tfsa-nonreg-rrsp',
+                'nonreg-tfsa-rrsp',
+                'nonreg-rrsp-tfsa',
+                'rrsp-nonreg-tfsa',
+                'proportional',
+                'tax-efficient-auto'
+            ];
+            const evals = candidateStrategies.map(s => evaluateLifetimeObjective(s));
+            evals.sort((a, b) => (a.objective - b.objective) || (b.finalEstate - a.finalEstate));
+            effectiveStrategy = evals[0].strategy;
+            if (runStatusEl) {
+                runStatusEl.style.color = '#166534';
+                runStatusEl.innerText = `Optimized strategy selected: ${effectiveStrategy}`;
+            }
+        }
+
         const results =[];
         let isDepleted = false;
 
@@ -1206,7 +1420,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const executeByStrategy = (targetNet) => {
                 if (targetNet <= 0 || netNeeded <= 0) return;
 
-                if (strategy === 'proportional') {
+                if (effectiveStrategy === 'proportional') {
                     for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
                         let tot = rrsp + tfsa + nonreg;
                         if (tot <= 0) break;
@@ -1220,6 +1434,30 @@ document.addEventListener("DOMContentLoaded", () => {
                         executeDraw('nonreg', needNetToSplit * pNonReg);
                         executeDraw('rrsp', needNetToSplit * pRRSP);
                     }
+                } else if (effectiveStrategy === 'tax-efficient-auto') {
+                    const oasThreshold = 90997 * inflationFactor;
+                    const chunk = Math.max(250, 5000 * inflationFactor);
+                    for (let k = 0; k < 60 && netNeeded > 0.01; k++) {
+                        const candidates = [];
+                        if (tfsa > 0) candidates.push({ acc: 'tfsa', score: 0 });
+                        if (nonreg > 0) {
+                            const acbRatio = nonreg > 0.01 ? Math.min(currentAcb / nonreg, 1.0) : 1.0;
+                            const inclusionRate = (1 - acbRatio) * 0.50;
+                            const probe = findGrossDraw(Math.min(chunk, netNeeded), nonreg, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                            const projectedTaxable = currentTaxableIncome + probe.taxableAdd;
+                            const oasPenalty = currentAge >= 65 ? Math.max(0, projectedTaxable - oasThreshold) * 0.15 : 0;
+                            candidates.push({ acc: 'nonreg', score: probe.tax + oasPenalty });
+                        }
+                        if (rrsp > 0) {
+                            const probe = findGrossDraw(Math.min(chunk, netNeeded), rrsp, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                            const projectedTaxable = currentTaxableIncome + probe.taxableAdd;
+                            const oasPenalty = currentAge >= 65 ? Math.max(0, projectedTaxable - oasThreshold) * 0.15 : 0;
+                            candidates.push({ acc: 'rrsp', score: probe.tax + oasPenalty });
+                        }
+                        if (candidates.length === 0) break;
+                        candidates.sort((a, b) => a.score - b.score);
+                        executeDraw(candidates[0].acc, Math.min(chunk, netNeeded));
+                    }
                 } else {
                     const sequences = {
                         'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
@@ -1227,20 +1465,20 @@ document.addEventListener("DOMContentLoaded", () => {
                         'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
                         'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
                     };
-                    sequences[strategy].forEach(acc => executeDraw(acc, targetNet));
+                    sequences[effectiveStrategy].forEach(acc => executeDraw(acc, targetNet));
                 }
             };
 
             executeByStrategy(netNeeded);
 
-            if (strategy !== 'proportional' && netNeeded > 0.01) {
+            if (effectiveStrategy !== 'proportional' && effectiveStrategy !== 'tax-efficient-auto' && netNeeded > 0.01) {
                 const sequences = {
                     'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
                     'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
                     'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
                     'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
                 };
-                sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                sequences[effectiveStrategy].forEach(acc => executeDraw(acc, netNeeded));
             }
 
             if (grossOAS > 0) {
@@ -1334,7 +1572,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     oasPercent,
                     rrifStartAge,
                     enforceRrifMin,
-                    strategy,
+                    strategy: effectiveStrategy,
                     projectionAge: lifeExpectancy,
                     trials: mcTrials,
                     volatility: mcVolatility,
@@ -1397,7 +1635,7 @@ document.addEventListener("DOMContentLoaded", () => {
             runStatusEl.innerText = 'Deterministic mode ready.';
         }
 
-        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode);
+        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, strategy, effectiveStrategy);
     }
 
     function recalculateForUiChange() {
@@ -1411,7 +1649,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (box) box.style.display = enabled ? 'block' : 'none';
     }
 
-    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode) {
+    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy, effectiveStrategy) {
         const displayInflated = document.getElementById('displayMode').checked;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         
@@ -1488,6 +1726,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="summary-value">${formatCurrency(totClawback)}</div>
             </div>
         `;
+
+        if (selectedStrategy === 'optimized-lifetime') {
+            const strategyLabels = {
+                'tfsa-nonreg-rrsp': 'TFSA First',
+                'nonreg-tfsa-rrsp': 'Non-Reg First',
+                'nonreg-rrsp-tfsa': 'Preserve TFSA',
+                'rrsp-nonreg-tfsa': 'RRSP Meltdown',
+                'proportional': 'Proportional',
+                'tax-efficient-auto': 'Tax-Efficient Auto'
+            };
+            const selectedLabel = strategyLabels[effectiveStrategy] || effectiveStrategy;
+            const existing = document.getElementById('optimizedStrategyNote');
+            if (existing) existing.remove();
+            const note = document.createElement('div');
+            note.id = 'optimizedStrategyNote';
+            note.style.marginTop = '10px';
+            note.style.fontSize = '0.82rem';
+            note.style.color = '#475569';
+            note.innerText = `Optimized strategy selected for this run: ${selectedLabel}`;
+            document.getElementById('summaryGrid').after(note);
+        } else {
+            const existing = document.getElementById('optimizedStrategyNote');
+            if (existing) existing.remove();
+        }
 
         const mcEl = document.getElementById('mcSummary');
         if (monteCarloEnabled && monteCarloResults) {
