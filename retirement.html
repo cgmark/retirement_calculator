@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax-Optimized Retirement Planner</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+            --section-bg: #f1f5f9;
+            
+            /* Okabe-Ito Colorblind Friendly Palette */
+            --color-rrsp: #0072B2;      
+            --color-tfsa: #009E73;      
+            --color-nonreg: #E69F00;    
+            --color-cpp: #56B4E9;       
+            --color-oas: #CC79A7;       
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { text-align: center; color: var(--text); margin-bottom: 30px; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+        }
+
+        .charts-container { display: flex; flex-direction: column; gap: 20px; }
+        .chart-wrapper { position: relative; height: 320px; width: 100%; }
+
+        .input-section {
+            background: var(--section-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .input-section h4 {
+            margin-top: 0; margin-bottom: 10px; color: #334155;
+            border-bottom: 1px solid #cbd5e1; padding-bottom: 5px;
+        }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .form-group { margin-bottom: 12px; }
+        
+        label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
+
+        input, select {
+            width: 100%; padding: 8px; border: 1px solid #cbd5e1;
+            border-radius: 6px; font-size: 0.95rem; box-sizing: border-box;
+        }
+
+        button {
+            width: 100%; padding: 12px; background-color: var(--primary);
+            color: white; border: none; border-radius: 6px;
+            font-size: 1rem; font-weight: bold; cursor: pointer; margin-top: 5px;
+        }
+
+        button:hover { background-color: #1d4ed8; }
+
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .summary-box { background: var(--section-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
+        .summary-box.highlight { background: #e0f2fe; border-color: #7dd3fc; }
+        .summary-box.alert { background: #fee2e2; border-color: #fca5a5; }
+        .summary-title { font-size: 0.8rem; font-weight: 600; color: #475569; text-transform: uppercase; margin-bottom: 5px; }
+        .summary-value { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+
+        .table-container { overflow-x: auto; margin-top: 20px;}
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }
+        th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+        th { background-color: var(--section-bg); font-weight: 600; }
+        th:last-child, td:last-child { border-right: none; }
+        th:first-child, td:first-child { text-align: center; font-weight: bold; }
+        .group-header { text-align: center; background-color: #e2e8f0; border-bottom: 2px solid #cbd5e1; }
+        .depleted { color: #ef4444; font-weight: bold; }
+        .text-bold { font-weight: bold; }
+
+        @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } .chart-wrapper { height: 300px; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Tax-Optimized Retirement Planner</h1>
+    
+    <div class="dashboard">
+        <!-- Inputs Column -->
+        <div class="card" style="overflow-y: auto; max-height: 980px;">
+            <h3>Simulation Parameters</h3>
+
+            <div class="input-section" style="background: #e0f2fe; border: 1px solid #bae6fd;">
+                <h4>Display Options</h4>
+                <div class="form-group">
+                    <label>Currency Display Format</label>
+                    <select id="displayMode">
+                        <option value="real" selected>Today's Dollars (Inflation discounted)</option>
+                        <option value="nominal">Future Dollars (Nominal/Inflated)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <h4>Basic Info & Taxes</h4>
+                <div class="form-row">
+                    <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
+                    <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Inflation Rate (%)</label><input type="number" id="inflation" value="2.5" step="0.1"></div>
+                    <div class="form-group"><label>Invest Growth (%)</label><input type="number" id="growth" value="5.5" step="0.1"></div>
+                </div>
+                <div class="form-group">
+                    <label>Province of Residence (2024 Tax Brackets)</label>
+                    <select id="province">
+                        <option value="ON" selected>Ontario</option>
+                        <option value="BC">British Columbia</option>
+                        <option value="AB">Alberta</option>
+                        <option value="QC">Quebec (Simplified)</option>
+                        <option value="MB">Manitoba</option>
+                        <option value="SK">Saskatchewan</option>
+                        <option value="NS">Nova Scotia</option>
+                        <option value="NB">New Brunswick</option>
+                        <option value="NL">Newfoundland & Labrador</option>
+                        <option value="PE">Prince Edward Island</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-section">
+                <h4>Current Assets ($)</h4>
+                <div class="form-group"><label>RRSP Balance</label><input type="number" id="rrsp" value="500000"></div>
+                <div class="form-group"><label>TFSA Balance</label><input type="number" id="tfsa" value="100000"></div>
+                <div class="form-row">
+                    <div class="form-group"><label>Non-Reg Balance</label><input type="number" id="nonreg" value="200000"></div>
+                    <div class="form-group"><label>Non-Reg ACB</label><input type="number" id="nonregAcb" value="100000"></div>
+                </div>
+            </div>
+
+            <div class="input-section">
+                <h4>Canada Pension Plan (CPP)</h4>
+                <div class="form-row-3">
+                    <div class="form-group"><label>If taken at 60</label><input type="number" id="cpp60" value="500"></div>
+                    <div class="form-group"><label>If taken at 65</label><input type="number" id="cpp65" value="800"></div>
+                    <div class="form-group"><label>If taken at 70</label><input type="number" id="cpp70" value="1136"></div>
+                </div>
+                <div class="form-group" style="margin-top: 5px;">
+                    <label>Scenario to Model: Take CPP at age</label>
+                    <select id="cppScenario">
+                        <option value="60">Age 60</option>
+                        <option value="65" selected>Age 65</option>
+                        <option value="70">Age 70</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-section">
+                <h4>Old Age Security (OAS)</h4>
+                <div class="form-group">
+                    <label>Eligibility % (Years in Canada / 40)</label>
+                    <input type="number" id="oasPercent" value="100" max="100" min="0">
+                </div>
+            </div>
+
+            <div class="input-section">
+                <h4>Withdrawal Strategy Waterfall</h4>
+                <div class="form-group">
+                    <select id="strategy">
+                        <option value="tfsa-nonreg-rrsp">TFSA First (TFSA → Non-Reg → RRSP)</option>
+                        <option value="nonreg-tfsa-rrsp">Non-Reg First (Tax Deferral: Non-Reg → TFSA → RRSP)</option>
+                        <option value="nonreg-rrsp-tfsa">Preserve TFSA (Estate Planning: Non-Reg → RRSP → TFSA)</option>
+                        <option value="rrsp-nonreg-tfsa">RRSP Meltdown (Clawback Prevention: RRSP → Non-Reg → TFSA)</option>
+                        <option value="proportional">Proportional (Smooth Taxes: Draw from all evenly)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="calcBtn">Run Simulation</button>
+        </div>
+
+        <!-- Charts Column -->
+        <div class="charts-container">
+            <div class="card">
+                <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem;" id="chart1Title">Asset Balances Over Time</h3>
+                <div class="chart-wrapper"><canvas id="balanceChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem;" id="chart2Title">Gross Income Sources vs Net Target</h3>
+                <div class="chart-wrapper"><canvas id="incomeChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="card">
+        <h3 style="margin-top: 0; margin-bottom: 15px;">Lifetime Summary Totals <span id="summarySubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
+        <div class="summary-grid" id="summaryGrid">
+            <!-- Injected via JS -->
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card table-container">
+        <h3 style="margin-top: 0; margin-bottom: 10px;">Yearly Breakdown <span id="tableSubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
+        <table>
+            <thead>
+                <tr>
+                    <th rowspan="2">Age</th>
+                    <th rowspan="2">Target Spend<br>(Net)</th>
+                    <th colspan="5" class="group-header">Gross Withdrawals & Income Sources</th>
+                    <th colspan="2" class="group-header">Taxes</th>
+                    <th colspan="4" class="group-header">End of Year Balances</th>
+                </tr>
+                <tr>
+                    <th>CPP</th>
+                    <th>OAS</th>
+                    <th>RRSP Draw</th>
+                    <th>TFSA Draw</th>
+                    <th>Non-Reg Draw</th>
+                    <th style="color:#ef4444;">Income Tax</th>
+                    <th style="color:#ef4444;">OAS Clawback</th>
+                    <th>RRSP</th>
+                    <th>TFSA</th>
+                    <th>Non-Reg (ACB)</th>
+                    <th>Total Assets</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Rows injected via JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    let balanceChartInst = null;
+    let incomeChartInst = null;
+
+    const inputIds =[
+        'displayMode', 'age', 'spending', 'inflation', 'growth', 'province',
+        'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
+        'cppScenario', 'oasPercent', 'strategy'
+    ];
+
+    const formatCurrency = (num) => {
+        if (num === 0 || Math.abs(num) < 0.5) return '-';
+        return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(num);
+    };
+
+    function saveInputs() {
+        try {
+            inputIds.forEach(id => { 
+                const el = document.getElementById(id);
+                if(el) localStorage.setItem(`retirePlanner_${id}`, el.value); 
+            });
+        } catch (e) {
+            console.warn("Local storage unavailable", e);
+        }
+    }
+
+    function loadInputs() {
+        try {
+            inputIds.forEach(id => {
+                const val = localStorage.getItem(`retirePlanner_${id}`);
+                const el = document.getElementById(id);
+                if (val !== null && el) el.value = val;
+            });
+        } catch (e) {
+            console.warn("Local storage unavailable", e);
+        }
+    }
+
+    // --- 2024 TAX ENGINE ---
+    const provData = {
+        'ON': { bpa: 12399, lowestRate: 0.0505, brackets:[{limit: 51446, rate: 0.0505}, {limit: 102894, rate: 0.0915}, {limit: 150000, rate: 0.1116}, {limit: 220000, rate: 0.1216}, {limit: Infinity, rate: 0.1316}] },
+        'BC': { bpa: 12580, lowestRate: 0.0506, brackets:[{limit: 47937, rate: 0.0506}, {limit: 95875, rate: 0.077}, {limit: 110076, rate: 0.105}, {limit: 133797, rate: 0.1229}, {limit: 181232, rate: 0.147}, {limit: 252752, rate: 0.168}, {limit: Infinity, rate: 0.205}] },
+        'AB': { bpa: 21885, lowestRate: 0.10, brackets:[{limit: 148269, rate: 0.10}, {limit: 177922, rate: 0.12}, {limit: 237230, rate: 0.13}, {limit: 355845, rate: 0.14}, {limit: Infinity, rate: 0.15}] },
+        'QC': { bpa: 18056, lowestRate: 0.14, brackets:[{limit: 51780, rate: 0.14}, {limit: 103545, rate: 0.19}, {limit: 126000, rate: 0.24}, {limit: Infinity, rate: 0.2575}] },
+        'MB': { bpa: 15780, lowestRate: 0.108, brackets:[{limit: 47000, rate: 0.108}, {limit: 100000, rate: 0.1275}, {limit: Infinity, rate: 0.174}] },
+        'SK': { bpa: 18491, lowestRate: 0.105, brackets:[{limit: 52057, rate: 0.105}, {limit: 148734, rate: 0.125}, {limit: Infinity, rate: 0.145}] },
+        'NS': { bpa: 11481, lowestRate: 0.0879, brackets:[{limit: 29590, rate: 0.0879}, {limit: 59180, rate: 0.1495}, {limit: 93000, rate: 0.1667}, {limit: 150000, rate: 0.175}, {limit: Infinity, rate: 0.21}] },
+        'NB': { bpa: 13044, lowestRate: 0.094, brackets:[{limit: 49958, rate: 0.094}, {limit: 99916, rate: 0.14}, {limit: 185064, rate: 0.16}, {limit: Infinity, rate: 0.195}] },
+        'NL': { bpa: 10818, lowestRate: 0.087, brackets:[{limit: 43198, rate: 0.087}, {limit: 86395, rate: 0.145}, {limit: 154244, rate: 0.158}, {limit: 215943, rate: 0.178}, {limit: 275870, rate: 0.198}, {limit: 551739, rate: 0.208}, {limit: Infinity, rate: 0.218}] },
+        'PE': { bpa: 13500, lowestRate: 0.0965, brackets:[{limit: 32759, rate: 0.0965}, {limit: 64313, rate: 0.1363}, {limit: 105000, rate: 0.1665}, {limit: 140000, rate: 0.1875}, {limit: Infinity, rate: 0.1875}] }
+    };
+
+    function calculateTax(income, provCode, inflFactor) {
+        if (income <= 0) return 0;
+        
+        const fedBPA = 15705 * inflFactor;
+        const fedBrackets =[
+            {limit: 55867 * inflFactor, rate: 0.15},
+            {limit: 111733 * inflFactor, rate: 0.205},
+            {limit: 173205 * inflFactor, rate: 0.26},
+            {limit: 246752 * inflFactor, rate: 0.29},
+            {limit: Infinity, rate: 0.33}
+        ];
+        
+        let fedTax = 0, prevLimit = 0;
+        for (let b of fedBrackets) {
+            if (income > prevLimit) {
+                fedTax += (Math.min(income, b.limit) - prevLimit) * b.rate;
+            }
+            prevLimit = b.limit;
+        }
+        fedTax -= (fedBPA * 0.15); 
+        if (fedTax < 0) fedTax = 0;
+
+        const pData = provData[provCode];
+        const provBPA = pData.bpa * inflFactor;
+        let provTax = 0; prevLimit = 0;
+        for (let b of pData.brackets) {
+            let limit = b.limit * inflFactor;
+            if (income > prevLimit) {
+                provTax += (Math.min(income, limit) - prevLimit) * b.rate;
+            }
+            prevLimit = limit;
+        }
+        provTax -= (provBPA * pData.lowestRate);
+        if (provTax < 0) provTax = 0;
+
+        if (provCode === 'ON') {
+            const s1 = 5315 * inflFactor, s2 = 6802 * inflFactor;
+            let surtax = 0;
+            if (provTax > s1) surtax += (provTax - s1) * 0.20;
+            if (provTax > s2) surtax += (provTax - s2) * 0.36;
+            provTax += surtax;
+        }
+
+        return fedTax + provTax;
+    }
+
+    function findGrossDraw(neededNet, maxGrossAvailable, currentTaxableInc, incRate, provCode, inflFactor) {
+        if (neededNet <= 0) return { gross: 0, net: 0, tax: 0, taxableAdd: 0 };
+        
+        let low = 0, high = neededNet * 5; 
+        if (high > maxGrossAvailable) high = maxGrossAvailable; 
+        
+        let maxTaxableAdd = maxGrossAvailable * incRate;
+        let maxTax = calculateTax(currentTaxableInc + maxTaxableAdd, provCode, inflFactor) - calculateTax(currentTaxableInc, provCode, inflFactor);
+        let maxNet = maxGrossAvailable - maxTax;
+        
+        if (maxNet <= neededNet) {
+            return { gross: maxGrossAvailable, net: maxNet, tax: maxTax, taxableAdd: maxTaxableAdd };
+        }
+        
+        for(let i=0; i<30; i++) {
+            let mid = (low + high) / 2;
+            let taxAdd = mid * incRate;
+            let tax = calculateTax(currentTaxableInc + taxAdd, provCode, inflFactor) - calculateTax(currentTaxableInc, provCode, inflFactor);
+            let net = mid - tax;
+            if (net < neededNet) low = mid;
+            else high = mid;
+        }
+        
+        let finalGross = (low + high) / 2;
+        let finalTaxAdd = finalGross * incRate;
+        let finalTax = calculateTax(currentTaxableInc + finalTaxAdd, provCode, inflFactor) - calculateTax(currentTaxableInc, provCode, inflFactor);
+        return { gross: finalGross, net: finalGross - finalTax, tax: finalTax, taxableAdd: finalTaxAdd };
+    }
+
+    function calculateRetirement() {
+        saveInputs();
+
+        let age = parseInt(document.getElementById('age').value);
+        let rrsp = parseFloat(document.getElementById('rrsp').value);
+        let tfsa = parseFloat(document.getElementById('tfsa').value);
+        let nonreg = parseFloat(document.getElementById('nonreg').value);
+        let currentAcb = parseFloat(document.getElementById('nonregAcb').value);
+        
+        if (currentAcb > nonreg) { currentAcb = nonreg; document.getElementById('nonregAcb').value = nonreg; }
+
+        const baseSpending = parseFloat(document.getElementById('spending').value);
+        const inflation = parseFloat(document.getElementById('inflation').value) / 100;
+        const growth = parseFloat(document.getElementById('growth').value) / 100;
+        const provCode = document.getElementById('province').value;
+        
+        const cppScenarioAge = parseInt(document.getElementById('cppScenario').value);
+        let selectedCPPMonthly = cppScenarioAge === 60 ? parseFloat(document.getElementById('cpp60').value) : 
+                                 cppScenarioAge === 70 ? parseFloat(document.getElementById('cpp70').value) : 
+                                 parseFloat(document.getElementById('cpp65').value);
+
+        const oasPercent = parseFloat(document.getElementById('oasPercent').value) / 100;
+        const strategy = document.getElementById('strategy').value;
+
+        const results =[];
+        let isDepleted = false;
+
+        for (let i = 0; age + i <= 100; i++) {
+            let currentAge = age + i;
+            let inflationFactor = Math.pow(1 + inflation, i);
+            let targetSpending = baseSpending * inflationFactor;
+            
+            let totalIncomeTaxThisYear = 0;
+            let oasClawbackThisYear = 0;
+
+            let grossCPP = 0, grossOAS = 0;
+            let drawRRSP = 0, drawTFSA = 0, drawNonReg = 0;
+            let netNeeded = 0;
+
+            if (currentAge >= cppScenarioAge) grossCPP = (selectedCPPMonthly * 12) * inflationFactor;
+            if (currentAge >= 65) {
+                let baseOASMonthly = currentAge >= 75 ? 817.36 : 743.05;
+                grossOAS = (baseOASMonthly * 12) * oasPercent * inflationFactor;
+            }
+
+            let currentTaxableIncome = grossCPP + grossOAS;
+            let baseTax = calculateTax(currentTaxableIncome, provCode, inflationFactor);
+            totalIncomeTaxThisYear += baseTax;
+            let netGovIncome = currentTaxableIncome - baseTax;
+            
+            netNeeded = Math.max(0, targetSpending - netGovIncome);
+
+            const executeDraw = (accountType, targetNet) => {
+                if (targetNet <= 0 || netNeeded <= 0) return;
+                let amountToDraw = Math.min(targetNet, netNeeded);
+
+                if (accountType === 'tfsa' && tfsa > 0) {
+                    let tfsaNetDraw = Math.min(tfsa, amountToDraw);
+                    tfsa -= tfsaNetDraw;
+                    netNeeded -= tfsaNetDraw;
+                    drawTFSA += tfsaNetDraw;
+
+                } else if (accountType === 'nonreg' && nonreg > 0) {
+                    // Safe ACB ratio to prevent NaN if nonreg nears 0
+                    let acbRatio = nonreg > 0.01 ? Math.min(currentAcb / nonreg, 1.0) : 1.0;
+                    let inclusionRate = (1 - acbRatio) * 0.50; 
+                    
+                    let res = findGrossDraw(amountToDraw, nonreg, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                    nonreg -= res.gross;
+                    netNeeded -= res.net;
+                    totalIncomeTaxThisYear += res.tax;
+                    drawNonReg += res.gross;
+                    currentTaxableIncome += res.taxableAdd;
+                    
+                    currentAcb -= (res.gross * acbRatio);
+                    if (currentAcb < 0) currentAcb = 0;
+
+                } else if (accountType === 'rrsp' && rrsp > 0) {
+                    let res = findGrossDraw(amountToDraw, rrsp, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                    rrsp -= res.gross;
+                    netNeeded -= res.net;
+                    totalIncomeTaxThisYear += res.tax;
+                    drawRRSP += res.gross;
+                    currentTaxableIncome += res.taxableAdd;
+                }
+            };
+
+            let maxTaxFreeInc = 0;
+            let low = 0, high = 50000 * inflationFactor;
+            for(let j=0; j<20; j++) {
+                let mid = (low+high)/2;
+                if(calculateTax(mid, provCode, inflationFactor) <= 0.01) low=mid; else high=mid;
+            }
+            maxTaxFreeInc = low;
+            
+            let remainingZeroTaxRoom = Math.max(0, maxTaxFreeInc - currentTaxableIncome);
+            let rrspTaxFreeDraw = Math.min(rrsp, remainingZeroTaxRoom, netNeeded);
+            
+            if (rrspTaxFreeDraw > 0) {
+                rrsp -= rrspTaxFreeDraw;
+                netNeeded -= rrspTaxFreeDraw;
+                drawRRSP += rrspTaxFreeDraw;
+                currentTaxableIncome += rrspTaxFreeDraw;
+            }
+
+            if (strategy === 'proportional') {
+                let tot = rrsp + tfsa + nonreg;
+                if (tot > 0) {
+                    let pRRSP = rrsp / tot; 
+                    let pTFSA = tfsa / tot; 
+                    let pNonReg = nonreg / tot;
+                    
+                    let needNetToSplit = netNeeded; 
+                    executeDraw('tfsa', needNetToSplit * pTFSA);
+                    executeDraw('nonreg', needNetToSplit * pNonReg);
+                    executeDraw('rrsp', needNetToSplit * pRRSP);['nonreg', 'tfsa', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
+                }
+            } else {
+                const sequences = {
+                    'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                    'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                    'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                    'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                };
+                sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+            }
+
+            if (grossOAS > 0) {
+                let oasThreshold = 90997 * inflationFactor;
+                if (currentTaxableIncome > oasThreshold) {
+                    let clawback = (currentTaxableIncome - oasThreshold) * 0.15;
+                    clawback = Math.min(clawback, grossOAS); 
+                    oasClawbackThisYear = clawback;
+                    
+                    netNeeded = clawback; 
+                    if (strategy === 'proportional') {
+                        ['nonreg', 'tfsa', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
+                    } else {
+                        const sequences = {
+                            'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                            'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                            'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                            'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                        };
+                        sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                    }
+                }
+            }
+
+            let totalAssets = rrsp + tfsa + nonreg;
+            if (netNeeded > 1) isDepleted = true;
+
+            results.push({
+                yearIndex: i,
+                age: currentAge,
+                spending: targetSpending,
+                cpp: grossCPP,
+                oas: grossOAS,
+                drawRRSP: drawRRSP,
+                drawTFSA: drawTFSA,
+                drawNonReg: drawNonReg,
+                rrsp: rrsp,
+                tfsa: tfsa,
+                nonreg: nonreg,
+                acb: currentAcb,
+                total: totalAssets,
+                incomeTax: totalIncomeTaxThisYear,
+                oasClawback: oasClawbackThisYear,
+                depleted: isDepleted
+            });
+
+            if (isDepleted) break;
+
+            rrsp *= (1 + growth); tfsa *= (1 + growth); nonreg *= (1 + growth);
+        }
+
+        updateUI(results);
+    }
+
+    function updateUI(results) {
+        const displayMode = document.getElementById('displayMode').value;
+        const inflation = parseFloat(document.getElementById('inflation').value) / 100;
+        
+        const adj = (val, idx) => displayMode === 'real' ? val / Math.pow(1 + inflation, idx) : val;
+
+        const strSuffix = displayMode === 'real' ? "(Today's Dollars)" : "(Inflated/Nominal Dollars)";
+        document.getElementById('chart1Title').innerText = `Asset Balances Over Time ${strSuffix}`;
+        document.getElementById('chart2Title').innerText = `Gross Income Sources vs Net Target ${strSuffix}`;
+        document.getElementById('tableSubtitle').innerText = strSuffix;
+        document.getElementById('summarySubtitle').innerText = strSuffix;
+
+        // --- TABLE ---
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        
+        results.forEach(r => {
+            const tr = document.createElement('tr');
+            if (r.depleted) tr.classList.add('depleted');
+            
+            tr.innerHTML = `
+                <td>${r.age}</td>
+                <td>${formatCurrency(adj(r.spending, r.yearIndex))} ${r.depleted ? '<br><small style="color:red;">(Shortfall)</small>' : ''}</td>
+                <td>${formatCurrency(adj(r.cpp, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.oas, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.drawRRSP, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.drawTFSA, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.drawNonReg, r.yearIndex))}</td>
+                <td style="color:#ef4444;">${formatCurrency(adj(r.incomeTax, r.yearIndex))}</td>
+                <td style="color:#ef4444;">${formatCurrency(adj(r.oasClawback, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.rrsp, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.tfsa, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.nonreg, r.yearIndex))}<br><small style="color:#64748b;">(ACB: ${formatCurrency(adj(r.acb, r.yearIndex))})</small></td>
+                <td class="text-bold">${formatCurrency(adj(r.total, r.yearIndex))}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // --- SUMMARY ---
+        let totRRSP = 0, totTFSA = 0, totNonReg = 0, totCPP = 0, totOAS = 0, totTax = 0, totClawback = 0;
+        results.forEach(r => {
+            totRRSP += adj(r.drawRRSP, r.yearIndex);
+            totTFSA += adj(r.drawTFSA, r.yearIndex);
+            totNonReg += adj(r.drawNonReg, r.yearIndex);
+            totCPP += adj(r.cpp, r.yearIndex);
+            totOAS += adj(r.oas, r.yearIndex);
+            totTax += adj(r.incomeTax, r.yearIndex);
+            totClawback += adj(r.oasClawback, r.yearIndex);
+        });
+
+        const finalRow = results[results.length - 1];
+        const finalEstate = adj(finalRow.total, finalRow.yearIndex);
+        const depleted = finalRow.depleted;
+        
+        document.getElementById('summaryGrid').innerHTML = `
+            <div class="summary-box ${depleted ? 'alert' : 'highlight'}">
+                <div class="summary-title">${depleted ? 'Depleted At Age' : 'Final Estate Value (Age ' + finalRow.age + ')'}</div>
+                <div class="summary-value">${depleted ? finalRow.age : formatCurrency(finalEstate)}</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-title">Total Portfolio Drawn</div>
+                <div class="summary-value">${formatCurrency(totRRSP + totTFSA + totNonReg)}</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-title">Total CPP + OAS (Gross)</div>
+                <div class="summary-value">${formatCurrency(totCPP + totOAS)}</div>
+            </div>
+            <div class="summary-box alert">
+                <div class="summary-title">Total Income Tax Paid</div>
+                <div class="summary-value">${formatCurrency(totTax)}</div>
+            </div>
+            <div class="summary-box alert">
+                <div class="summary-title">Total OAS Clawback</div>
+                <div class="summary-value">${formatCurrency(totClawback)}</div>
+            </div>
+        `;
+
+        // --- CHARTS ---
+        const labels = results.map(r => r.age);
+        const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+        const sharedOptions = {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { tooltip: { callbacks: { label: function(ctx) {
+                let label = ctx.dataset.label || ''; if (label) label += ': ';
+                if (ctx.parsed.y !== null) label += new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(ctx.parsed.y);
+                return label;
+            }}}},
+            scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: function(v) { return '$' + v.toLocaleString(); } } } }
+        };
+
+        if (balanceChartInst) balanceChartInst.destroy();
+        balanceChartInst = new Chart(document.getElementById('balanceChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets:[
+                    { label: 'RRSP', data: results.map(r => adj(r.rrsp, r.yearIndex)), backgroundColor: cssVar('--color-rrsp') },
+                    { label: 'TFSA', data: results.map(r => adj(r.tfsa, r.yearIndex)), backgroundColor: cssVar('--color-tfsa') },
+                    { label: 'Non-Reg', data: results.map(r => adj(r.nonreg, r.yearIndex)), backgroundColor: cssVar('--color-nonreg') }
+                ]
+            }, options: { ...sharedOptions }
+        });
+
+        if (incomeChartInst) incomeChartInst.destroy();
+        incomeChartInst = new Chart(document.getElementById('incomeChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets:[
+                    { 
+                        type: 'line', 
+                        label: 'Net Spend Goal', 
+                        data: results.map(r => adj(r.spending, r.yearIndex)), 
+                        borderColor: '#1e293b', 
+                        borderWidth: 2, 
+                        borderDash: [5, 5],
+                        fill: false, 
+                        pointRadius: 0,
+                        order: 0 
+                    },
+                    { label: 'CPP', data: results.map(r => adj(r.cpp, r.yearIndex)), backgroundColor: cssVar('--color-cpp'), order: 1 },
+                    { label: 'OAS', data: results.map(r => adj(r.oas, r.yearIndex)), backgroundColor: cssVar('--color-oas'), order: 1 },
+                    { label: 'RRSP Draw', data: results.map(r => adj(r.drawRRSP, r.yearIndex)), backgroundColor: cssVar('--color-rrsp'), order: 1 },
+                    { label: 'TFSA Draw', data: results.map(r => adj(r.drawTFSA, r.yearIndex)), backgroundColor: cssVar('--color-tfsa'), order: 1 },
+                    { label: 'Non-Reg Draw', data: results.map(r => adj(r.drawNonReg, r.yearIndex)), backgroundColor: cssVar('--color-nonreg'), order: 1 }
+                ]
+            }, options: { ...sharedOptions }
+        });
+    }
+
+    // --- INITIALIZATION ---
+    loadInputs();
+    
+    // Bind all inputs safely inside the script, avoiding global scope issues
+    inputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.addEventListener('change', calculateRetirement);
+    });
+
+    // Bind the button
+    const runBtn = document.getElementById('calcBtn');
+    if(runBtn) runBtn.addEventListener('click', calculateRetirement);
+
+    // Run initial calculation
+    calculateRetirement();
+});
+</script>
+
+</body>
+</html>
