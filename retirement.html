@@ -852,7 +852,7 @@ document.addEventListener("DOMContentLoaded", () => {
             completedTrials++;
 
             if ((t + 1) % chunkSize === 0 || t === trials - 1) {
-                if (typeof onProgress === 'function') onProgress(completedTrials, trials);
+                if (typeof onProgress === 'function') onProgress(completedTrials, trials, bucketLabels, { ...bucketCounts });
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
@@ -888,6 +888,65 @@ document.addEventListener("DOMContentLoaded", () => {
             bucketLabels,
             bucketCounts
         };
+    }
+
+    function renderMonteCarloOutcomeChart(monteCarloResults) {
+        const mcCard = document.getElementById('mcOutcomeCard');
+        const mcSubtitle = document.getElementById('mcChartSubtitle');
+        if (!mcCard || !mcSubtitle) return;
+
+        if (!monteCarloResults || !monteCarloResults.trials || monteCarloResults.trials <= 0) {
+            if (mcOutcomeChartInst) {
+                mcOutcomeChartInst.destroy();
+                mcOutcomeChartInst = null;
+            }
+            mcCard.style.display = 'none';
+            mcSubtitle.innerText = '';
+            return;
+        }
+
+        mcCard.style.display = 'block';
+        const bucketLabels = monteCarloResults.bucketLabels || [];
+        const counts = bucketLabels.map(l => monteCarloResults.bucketCounts?.[l] || 0);
+        const percents = counts.map(c => (c / monteCarloResults.trials) * 100);
+        mcSubtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? ' (partial run)' : ''}`;
+
+        if (!mcOutcomeChartInst) {
+            mcOutcomeChartInst = new Chart(document.getElementById('mcOutcomeChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: bucketLabels,
+                    datasets: [{
+                        label: 'Trial Share (%)',
+                        data: percents,
+                        backgroundColor: bucketLabels.map(l => l.includes('(Success)') ? '#16a34a' : '#f59e0b')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { maxRotation: 0, minRotation: 0 } },
+                        y: { beginAtZero: true, ticks: { callback: (v) => `${v}%` } }
+                    }
+                }
+            });
+            return;
+        }
+
+        mcOutcomeChartInst.data.labels = bucketLabels;
+        mcOutcomeChartInst.data.datasets[0].data = percents;
+        mcOutcomeChartInst.data.datasets[0].backgroundColor = bucketLabels.map(l => l.includes('(Success)') ? '#16a34a' : '#f59e0b');
+        mcOutcomeChartInst.options.plugins.tooltip.callbacks.label = (ctx) => `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`;
+        mcOutcomeChartInst.update('none');
     }
 
     async function calculateRetirement(runMonteCarloNow = true) {
@@ -1165,11 +1224,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     volatility: mcVolatility,
                     inflationVolatility: mcInflationVolatility,
                     seed: mcSeed,
-                    onProgress: (done, total) => {
+                    onProgress: (done, total, bucketLabels, bucketCounts) => {
                         if (runStatusEl) {
                             const pct = ((done / total) * 100).toFixed(0);
                             runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
                         }
+                        renderMonteCarloOutcomeChart({
+                            trials: done,
+                            requestedTrials: total,
+                            cancelled: false,
+                            bucketLabels,
+                            bucketCounts
+                        });
                     },
                     shouldCancel: () => mcCancelRequested
                 });
@@ -1334,48 +1400,8 @@ document.addEventListener("DOMContentLoaded", () => {
             mcEl.innerHTML = '';
         }
 
-        const mcCard = document.getElementById('mcOutcomeCard');
-        const mcSubtitle = document.getElementById('mcChartSubtitle');
-        if (mcOutcomeChartInst) {
-            mcOutcomeChartInst.destroy();
-            mcOutcomeChartInst = null;
-        }
-        if (monteCarloEnabled && monteCarloResults && monteCarloResults.trials > 0) {
-            mcCard.style.display = 'block';
-            const bucketLabels = monteCarloResults.bucketLabels || [];
-            const counts = bucketLabels.map(l => monteCarloResults.bucketCounts?.[l] || 0);
-            const percents = counts.map(c => (c / monteCarloResults.trials) * 100);
-            mcSubtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? ' (partial run)' : ''}`;
-            mcOutcomeChartInst = new Chart(document.getElementById('mcOutcomeChart').getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: bucketLabels,
-                    datasets: [{
-                        label: 'Trial Share (%)',
-                        data: percents,
-                        backgroundColor: bucketLabels.map(l => l.includes('(Success)') ? '#16a34a' : '#f59e0b')
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { maxRotation: 0, minRotation: 0 } },
-                        y: { beginAtZero: true, ticks: { callback: (v) => `${v}%` } }
-                    }
-                }
-            });
-        } else {
-            mcCard.style.display = 'none';
-            mcSubtitle.innerText = '';
-        }
+        if (monteCarloEnabled) renderMonteCarloOutcomeChart(monteCarloResults);
+        else renderMonteCarloOutcomeChart(null);
 
         const debugMode = document.getElementById('debugMode').value;
         const debugEl = document.getElementById('debugSummary');
