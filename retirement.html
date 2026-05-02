@@ -148,9 +148,9 @@
                     <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
                     <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
                 </div>
-                <div class="form-group"><label>Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
+                <div class="form-group"><label title="How long the plan should last. The simulation runs from your current age to this age.">Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
                 <div class="form-group" style="margin-top: 6px;">
-                    <label>Optional Spending Schedule (today's dollars)</label>
+                    <label title="Set different spending targets for different age ranges. If an age is not covered, the default Desired Net Spend/Yr is used.">Optional Spending Schedule (today's dollars)</label>
                     <div id="spendingScheduleRows" style="display:flex; flex-direction:column; gap:8px;"></div>
                     <button type="button" id="addSpendingRow" style="margin-top:8px; padding:8px; font-size:0.9rem;">Add Spending Phase</button>
                     <div id="spendingScheduleStatus" style="margin-top:6px; font-size:0.8rem; color:#64748b;"></div>
@@ -215,7 +215,7 @@
                 <h4>RRIF Minimum Withdrawals</h4>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>RRIF Start Age</label>
+                        <label title="Age when RRSP minimum withdrawals begin under RRIF rules in this model.">RRIF Start Age</label>
                         <input type="number" id="rrifStartAge" value="71" min="55" max="95">
                     </div>
                     <div class="form-group">
@@ -231,6 +231,7 @@
             <div class="input-section">
                 <h4>Withdrawal Strategy Waterfall</h4>
                 <div class="form-group">
+                    <label title="Sets which account is tapped first for extra cash after government income and required RRIF withdrawals.">Account draw order</label>
                     <select id="strategy">
                         <option value="tfsa-nonreg-rrsp">TFSA First (TFSA → Non-Reg → RRSP)</option>
                         <option value="nonreg-tfsa-rrsp">Non-Reg First (Tax Deferral: Non-Reg → TFSA → RRSP)</option>
@@ -252,12 +253,12 @@
                 <div id="mcSettingsBox" style="display:none; margin-top:8px; padding:10px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;">
                     <div style="font-size:0.8rem; font-weight:700; color:#475569; margin-bottom:8px;">Simulation Settings</div>
                     <div class="form-row">
-                        <div class="form-group"><label>MC Trials</label><input type="number" id="mcTrials" value="500" min="100" max="10000" step="100"></div>
-                        <div class="form-group"><label>Return Volatility (%)</label><input type="number" id="mcVolatility" value="12" min="0" max="100" step="0.1"></div>
+                        <div class="form-group"><label title="How many random futures to test. More trials are smoother but slower.">MC Trials</label><input type="number" id="mcTrials" value="500" min="100" max="10000" step="100"></div>
+                        <div class="form-group"><label title="How much yearly investment returns can swing up or down around your expected growth rate.">Return Volatility (%)</label><input type="number" id="mcVolatility" value="12" min="0" max="100" step="0.1"></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label>Inflation Volatility (%)</label><input type="number" id="mcInflationVolatility" value="1.5" min="0" max="20" step="0.1"></div>
-                        <div class="form-group"><label>Seed (optional)</label><input type="number" id="mcSeed" value=""></div>
+                        <div class="form-group"><label title="How much yearly inflation can vary around your base inflation input.">Inflation Volatility (%)</label><input type="number" id="mcInflationVolatility" value="1.5" min="0" max="20" step="0.1"></div>
+                        <div class="form-group"><label title="Use a fixed number to repeat the same random simulation results.">Seed (optional)</label><input type="number" id="mcSeed" value=""></div>
                     </div>
                     <div style="font-size:0.8rem; color:#64748b;">Annual inflation shocks are allowed down to -3% and capped at 20%.</div>
                 </div>
