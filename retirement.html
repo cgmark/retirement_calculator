@@ -240,7 +240,31 @@
                 </div>
             </div>
 
+            <div class="input-section" id="mcSection">
+                <h4 style="margin-bottom:10px;">Monte Carlo Simulation <span title="Runs your plan many times with different yearly market and inflation paths to estimate probability of success/failure." style="display:inline-block; width:16px; height:16px; line-height:16px; text-align:center; border-radius:50%; border:1px solid #94a3b8; font-size:0.75rem; color:#475569; vertical-align:middle;">?</span></h4>
+                <div class="form-group" style="margin-top:10px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+                        <input type="checkbox" id="enableMonteCarlo" style="width:auto;">
+                        Enable
+                    </label>
+                </div>
+                <div id="mcSettingsBox" style="display:none; margin-top:8px; padding:10px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;">
+                    <div style="font-size:0.8rem; font-weight:700; color:#475569; margin-bottom:8px;">Simulation Settings</div>
+                    <div class="form-row">
+                        <div class="form-group"><label>MC Trials</label><input type="number" id="mcTrials" value="500" min="100" max="10000" step="100"></div>
+                        <div class="form-group"><label>Return Volatility (%)</label><input type="number" id="mcVolatility" value="12" min="0" max="100" step="0.1"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Inflation Volatility (%)</label><input type="number" id="mcInflationVolatility" value="1.5" min="0" max="20" step="0.1"></div>
+                        <div class="form-group"><label>Seed (optional)</label><input type="number" id="mcSeed" value=""></div>
+                    </div>
+                    <div style="font-size:0.8rem; color:#64748b;">Annual inflation shocks are allowed down to -3% and capped at 20%.</div>
+                </div>
+            </div>
+
             <button id="calcBtn">Run Simulation</button>
+            <button id="stopBtn" type="button" style="display:none; margin-top:6px; background:#b91c1c;">Stop Simulation</button>
+            <div id="runStatus" style="margin-top:8px; min-height:18px; font-size:0.82rem; color:#475569;"></div>
             <div class="form-group" style="margin-top:10px; margin-bottom:0; opacity:0.8;">
                 <label style="font-size:0.75rem; color:#64748b;">Advanced: Diagnostics</label>
                 <select id="debugMode" style="font-size:0.85rem; padding:6px;">
@@ -268,6 +292,7 @@
                 <div class="summary-grid" id="summaryGrid">
                     <!-- Injected via JS -->
                 </div>
+                <div id="mcSummary" style="display:none; margin-top:12px; padding:12px; border:1px solid #bfdbfe; border-radius:8px; background:#eff6ff; font-size:0.85rem;"></div>
                 <div id="debugSummary" style="display:none; margin-top:12px; padding:12px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; font-size:0.85rem;"></div>
             </div>
         </div>
@@ -312,11 +337,16 @@
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
     let incomeChartInst = null;
+    let lastMonteCarloResults = null;
+    let lastMonteCarloMeta = null;
+    let mcCancelRequested = false;
+    let mcIsRunning = false;
 
     const inputIds =[
         'displayMode', 'debugMode', 'age', 'spending', 'inflation', 'growth', 'province',
         'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
-        'cppScenario', 'oasPercent', 'rrifStartAge', 'enforceRrifMin', 'strategy'
+        'cppScenario', 'oasPercent', 'rrifStartAge', 'enforceRrifMin', 'strategy',
+        'enableMonteCarlo', 'mcTrials', 'mcVolatility', 'mcInflationVolatility', 'mcSeed'
     ];
 
     const formatCurrency = (num) => {
@@ -328,7 +358,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             inputIds.forEach(id => { 
                 const el = document.getElementById(id);
-                if(el) localStorage.setItem(`retirePlanner_${id}`, el.value); 
+                if(el) {
+                    const v = el.type === 'checkbox' ? String(el.checked) : el.value;
+                    localStorage.setItem(`retirePlanner_${id}`, v);
+                }
             });
         } catch (e) {
             console.warn("Local storage unavailable", e);
@@ -340,7 +373,10 @@ document.addEventListener("DOMContentLoaded", () => {
             inputIds.forEach(id => {
                 const val = localStorage.getItem(`retirePlanner_${id}`);
                 const el = document.getElementById(id);
-                if (val !== null && el) el.value = val;
+                if (val !== null && el) {
+                    if (el.type === 'checkbox') el.checked = val === 'true';
+                    else el.value = val;
+                }
             });
         } catch (e) {
             console.warn("Local storage unavailable", e);
@@ -553,8 +589,250 @@ document.addEventListener("DOMContentLoaded", () => {
         return rates[age] || 0;
     }
 
-    function calculateRetirement() {
+    function createSeededRng(seed) {
+        let s = seed >>> 0;
+        return function() {
+            s += 0x6D2B79F5;
+            let t = Math.imul(s ^ (s >>> 15), 1 | s);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function randomNormal(rng) {
+        let u = 0, v = 0;
+        while (u === 0) u = rng();
+        while (v === 0) v = rng();
+        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    function percentile(values, p) {
+        if (!values.length) return 0;
+        const sorted = [...values].sort((a, b) => a - b);
+        const idx = Math.max(0, Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))));
+        return sorted[idx];
+    }
+
+    async function runMonteCarlo(params) {
+        const {
+            age, rrspStart, tfsaStart, nonregStart, acbStart,
+            baseSpending, spendingSchedule, inflation, growth,
+            provCode, cppScenarioAge, selectedCPPMonthly, oasPercent,
+            rrifStartAge, enforceRrifMin, strategy, trials, volatility, inflationVolatility, seed, onProgress, shouldCancel
+        } = params;
+
+        const rng = Number.isFinite(seed) ? createSeededRng(seed) : Math.random;
+        let successCount = 0;
+        let totalTax = 0;
+        let totalClawback = 0;
+        const finalEstates = [];
+        const depletionAges = [];
+        let completedTrials = 0;
+        let cancelled = false;
+
+        const chunkSize = 25;
+        for (let t = 0; t < trials; t++) {
+            if (typeof shouldCancel === 'function' && shouldCancel()) {
+                cancelled = true;
+                break;
+            }
+            let rrsp = rrspStart;
+            let tfsa = tfsaStart;
+            let nonreg = nonregStart;
+            let currentAcb = acbStart;
+            let depleted = false;
+            let finalAge = age;
+            let thisTax = 0;
+            let thisClawback = 0;
+            let mcInflationFactor = 1;
+
+            for (let i = 0; age + i <= 100; i++) {
+                const currentAge = age + i;
+                const inflationFactor = mcInflationFactor;
+                const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
+                const targetSpending = ageBaseSpending * inflationFactor;
+
+                let totalIncomeTaxThisYear = 0;
+                let oasClawbackThisYear = 0;
+                let grossCPP = 0, grossOAS = 0;
+                let netNeeded = 0;
+
+                if (currentAge >= cppScenarioAge) grossCPP = (selectedCPPMonthly * 12) * inflationFactor;
+                if (currentAge >= 65) {
+                    const baseOASMonthly = currentAge >= 75 ? 817.36 : 743.05;
+                    grossOAS = (baseOASMonthly * 12) * oasPercent * inflationFactor;
+                }
+
+                let currentTaxableIncome = grossCPP + grossOAS;
+                const baseTax = calculateTax(currentTaxableIncome, provCode, inflationFactor);
+                totalIncomeTaxThisYear += baseTax;
+                let netGovIncome = currentTaxableIncome - baseTax;
+
+                if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
+                    const rrifMinRate = getRrifMinimumRate(currentAge);
+                    if (rrifMinRate > 0) {
+                        const mandatoryGross = Math.min(rrsp, rrsp * rrifMinRate);
+                        const mandatoryTax = calculateTax(currentTaxableIncome + mandatoryGross, provCode, inflationFactor) - calculateTax(currentTaxableIncome, provCode, inflationFactor);
+                        rrsp -= mandatoryGross;
+                        currentTaxableIncome += mandatoryGross;
+                        totalIncomeTaxThisYear += mandatoryTax;
+                        netGovIncome += (mandatoryGross - mandatoryTax);
+                    }
+                }
+
+                netNeeded = Math.max(0, targetSpending - netGovIncome);
+
+                const executeDraw = (accountType, targetNet) => {
+                    if (targetNet <= 0 || netNeeded <= 0) return;
+                    const amountToDraw = Math.min(targetNet, netNeeded);
+
+                    if (accountType === 'tfsa' && tfsa > 0) {
+                        const d = Math.min(tfsa, amountToDraw);
+                        tfsa -= d;
+                        netNeeded -= d;
+                    } else if (accountType === 'nonreg' && nonreg > 0) {
+                        const acbRatio = nonreg > 0.01 ? Math.min(currentAcb / nonreg, 1.0) : 1.0;
+                        const inclusionRate = (1 - acbRatio) * 0.50;
+                        const res = findGrossDraw(amountToDraw, nonreg, currentTaxableIncome, inclusionRate, provCode, inflationFactor);
+                        nonreg -= res.gross;
+                        netNeeded -= res.net;
+                        totalIncomeTaxThisYear += res.tax;
+                        currentTaxableIncome += res.taxableAdd;
+                        currentAcb -= (res.gross * acbRatio);
+                        if (currentAcb < 0) currentAcb = 0;
+                    } else if (accountType === 'rrsp' && rrsp > 0) {
+                        const res = findGrossDraw(amountToDraw, rrsp, currentTaxableIncome, 1.0, provCode, inflationFactor);
+                        rrsp -= res.gross;
+                        netNeeded -= res.net;
+                        totalIncomeTaxThisYear += res.tax;
+                        currentTaxableIncome += res.taxableAdd;
+                    }
+                };
+
+                let low = 0, high = 50000 * inflationFactor;
+                for (let j = 0; j < 20; j++) {
+                    const mid = (low + high) / 2;
+                    if (calculateTax(mid, provCode, inflationFactor) <= 0.01) low = mid; else high = mid;
+                }
+
+                const remainingZeroTaxRoom = Math.max(0, low - currentTaxableIncome);
+                const rrspTaxFreeDraw = Math.min(rrsp, remainingZeroTaxRoom, netNeeded);
+                if (rrspTaxFreeDraw > 0) {
+                    rrsp -= rrspTaxFreeDraw;
+                    netNeeded -= rrspTaxFreeDraw;
+                    currentTaxableIncome += rrspTaxFreeDraw;
+                }
+
+                const executeByStrategy = () => {
+                    if (strategy === 'proportional') {
+                        for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
+                            const tot = rrsp + tfsa + nonreg;
+                            if (tot <= 0) break;
+                            executeDraw('tfsa', netNeeded * (tfsa / tot));
+                            executeDraw('nonreg', netNeeded * (nonreg / tot));
+                            executeDraw('rrsp', netNeeded * (rrsp / tot));
+                        }
+                    } else {
+                        const sequences = {
+                            'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                            'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                            'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                            'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                        };
+                        sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                        if (netNeeded > 0.01) sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                    }
+                };
+
+                executeByStrategy();
+
+                if (grossOAS > 0) {
+                    const oasThreshold = 90997 * inflationFactor;
+                    let prevClawback = 0;
+                    for (let k = 0; k < 10; k++) {
+                        let clawback = 0;
+                        if (currentTaxableIncome > oasThreshold) clawback = (currentTaxableIncome - oasThreshold) * 0.15;
+                        clawback = Math.min(clawback, grossOAS);
+                        const deltaClawback = clawback - prevClawback;
+                        if (deltaClawback <= 0.01) {
+                            oasClawbackThisYear = clawback;
+                            break;
+                        }
+                        netNeeded = deltaClawback;
+                        executeByStrategy();
+                        oasClawbackThisYear = clawback;
+                        if (netNeeded > 0.01) break;
+                        prevClawback = clawback;
+                    }
+                }
+
+                thisTax += totalIncomeTaxThisYear;
+                thisClawback += oasClawbackThisYear;
+
+                finalAge = currentAge;
+                if (netNeeded > 1) {
+                    depleted = true;
+                    break;
+                }
+
+                const sampledGrowth = growth + (volatility * randomNormal(rng));
+                const yearlyGrowth = Math.max(-0.95, sampledGrowth);
+                const sampledInflation = inflation + (inflationVolatility * randomNormal(rng));
+                const yearlyInflation = Math.max(-0.03, Math.min(0.20, sampledInflation));
+                rrsp *= (1 + yearlyGrowth);
+                tfsa *= (1 + yearlyGrowth);
+                nonreg *= (1 + yearlyGrowth);
+                mcInflationFactor *= (1 + yearlyInflation);
+            }
+
+            if (!depleted) successCount++;
+            else depletionAges.push(finalAge);
+
+            finalEstates.push(rrsp + tfsa + nonreg);
+            totalTax += thisTax;
+            totalClawback += thisClawback;
+            completedTrials++;
+
+            if ((t + 1) % chunkSize === 0 || t === trials - 1) {
+                if (typeof onProgress === 'function') onProgress(completedTrials, trials);
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        if (completedTrials === 0) {
+            return {
+                trials: 0,
+                requestedTrials: trials,
+                successRate: 0,
+                avgTax: 0,
+                avgClawback: 0,
+                medianFinalEstate: 0,
+                p10FinalEstate: 0,
+                p90FinalEstate: 0,
+                medianDepletionAge: null,
+                cancelled
+            };
+        }
+
+        return {
+            trials: completedTrials,
+            requestedTrials: trials,
+            successRate: successCount / completedTrials,
+            avgTax: totalTax / completedTrials,
+            avgClawback: totalClawback / completedTrials,
+            medianFinalEstate: percentile(finalEstates, 50),
+            p10FinalEstate: percentile(finalEstates, 10),
+            p90FinalEstate: percentile(finalEstates, 90),
+            medianDepletionAge: depletionAges.length ? percentile(depletionAges, 50) : null,
+            cancelled
+        };
+    }
+
+    async function calculateRetirement(runMonteCarloNow = true) {
         saveInputs();
+        const runStatusEl = document.getElementById('runStatus');
+        const runBtn = document.getElementById('calcBtn');
+        const stopBtn = document.getElementById('stopBtn');
 
         let age = parseInt(document.getElementById('age').value);
         let rrsp = parseFloat(document.getElementById('rrsp').value);
@@ -579,6 +857,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const rrifStartAge = parseInt(document.getElementById('rrifStartAge').value);
         const enforceRrifMin = document.getElementById('enforceRrifMin').value === 'yes';
         const strategy = document.getElementById('strategy').value;
+        const enableMonteCarlo = document.getElementById('enableMonteCarlo').checked;
+        const mcTrials = Math.max(100, Math.min(10000, parseInt(document.getElementById('mcTrials').value) || 1000));
+        const mcVolatility = Math.max(0, parseFloat(document.getElementById('mcVolatility').value) / 100 || 0);
+        const mcInflationVolatility = Math.max(0, parseFloat(document.getElementById('mcInflationVolatility').value) / 100 || 0);
+        const mcSeedRaw = document.getElementById('mcSeed').value;
+        const mcSeed = mcSeedRaw === '' ? NaN : parseInt(mcSeedRaw);
 
         const results =[];
         let isDepleted = false;
@@ -781,18 +1065,116 @@ document.addEventListener("DOMContentLoaded", () => {
             rrsp *= (1 + growth); tfsa *= (1 + growth); nonreg *= (1 + growth);
         }
 
-        updateUI(results);
+        let monteCarloResults = null;
+        let monteCarloStale = false;
+        if (enableMonteCarlo && runMonteCarloNow) {
+            if (runStatusEl) {
+                runStatusEl.style.color = '#0369a1';
+                runStatusEl.innerText = `Running Monte Carlo (${mcTrials.toLocaleString()} trials)...`;
+            }
+            if (runBtn) {
+                runBtn.disabled = true;
+                runBtn.innerText = 'Running...';
+            }
+            if (stopBtn) stopBtn.style.display = 'block';
+            mcCancelRequested = false;
+            mcIsRunning = true;
+            try {
+                monteCarloResults = await runMonteCarlo({
+                    age,
+                    rrspStart: parseFloat(document.getElementById('rrsp').value),
+                    tfsaStart: parseFloat(document.getElementById('tfsa').value),
+                    nonregStart: parseFloat(document.getElementById('nonreg').value),
+                    acbStart: parseFloat(document.getElementById('nonregAcb').value),
+                    baseSpending,
+                    spendingSchedule,
+                    inflation,
+                    growth,
+                    provCode,
+                    cppScenarioAge,
+                    selectedCPPMonthly,
+                    oasPercent,
+                    rrifStartAge,
+                    enforceRrifMin,
+                    strategy,
+                    trials: mcTrials,
+                    volatility: mcVolatility,
+                    inflationVolatility: mcInflationVolatility,
+                    seed: mcSeed,
+                    onProgress: (done, total) => {
+                        if (runStatusEl) {
+                            const pct = ((done / total) * 100).toFixed(0);
+                            runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
+                        }
+                    },
+                    shouldCancel: () => mcCancelRequested
+                });
+            } finally {
+                mcIsRunning = false;
+                if (runBtn) {
+                    runBtn.disabled = false;
+                    runBtn.innerText = 'Run Simulation';
+                }
+                if (stopBtn) stopBtn.style.display = 'none';
+            }
+            if (runStatusEl) {
+                if (monteCarloResults.cancelled) {
+                    runStatusEl.style.color = '#b45309';
+                    runStatusEl.innerText = `Monte Carlo cancelled after ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials.`;
+                } else {
+                    runStatusEl.style.color = '#166534';
+                    runStatusEl.innerText = `Monte Carlo complete: ${(monteCarloResults.successRate * 100).toFixed(1)}% success over ${monteCarloResults.trials.toLocaleString()} trials.`;
+                }
+            }
+            lastMonteCarloResults = monteCarloResults;
+            lastMonteCarloMeta = {
+                trials: mcTrials,
+                returnVolatility: mcVolatility,
+                inflationVolatility: mcInflationVolatility,
+                seed: Number.isFinite(mcSeed) ? mcSeed : null,
+                runAtIso: new Date().toISOString(),
+                cancelled: monteCarloResults.cancelled,
+                completedTrials: monteCarloResults.trials,
+                requestedTrials: monteCarloResults.requestedTrials
+            };
+        } else if (enableMonteCarlo && !runMonteCarloNow) {
+            if (runStatusEl) {
+                runStatusEl.style.color = '#64748b';
+                runStatusEl.innerText = 'Monte Carlo inputs changed. Click Run Simulation to refresh probability results.';
+            }
+            if (lastMonteCarloResults) {
+                monteCarloResults = lastMonteCarloResults;
+                monteCarloStale = true;
+            }
+        } else if (runStatusEl) {
+            runStatusEl.style.color = '#64748b';
+            runStatusEl.innerText = 'Deterministic mode ready.';
+        }
+
+        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta);
     }
 
-    function updateUI(results) {
+    function recalculateForUiChange() {
+        const enabled = document.getElementById('enableMonteCarlo').checked;
+        calculateRetirement(!enabled);
+    }
+
+    function updateMonteCarloSettingsVisibility() {
+        const enabled = document.getElementById('enableMonteCarlo').checked;
+        const box = document.getElementById('mcSettingsBox');
+        if (box) box.style.display = enabled ? 'block' : 'none';
+    }
+
+    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta) {
         const displayMode = document.getElementById('displayMode').value;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         
         const adj = (val, idx) => displayMode === 'real' ? val / Math.pow(1 + inflation, idx) : val;
 
         const strSuffix = displayMode === 'real' ? "(Today's Dollars)" : "(Inflated/Nominal Dollars)";
-        document.getElementById('chart1Title').innerText = `Asset Balances Over Time ${strSuffix}`;
-        document.getElementById('chart2Title').innerText = `Gross Income Sources vs Net Target ${strSuffix}`;
+        const mcSuffix = monteCarloEnabled ? ' - Baseline Path' : '';
+        document.getElementById('chart1Title').innerText = `Asset Balances Over Time ${strSuffix}${mcSuffix}`;
+        document.getElementById('chart2Title').innerText = `Gross Income Sources vs Net Target ${strSuffix}${mcSuffix}`;
         document.getElementById('tableSubtitle').innerText = strSuffix;
         document.getElementById('summarySubtitle').innerText = strSuffix;
 
@@ -860,6 +1242,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="summary-value">${formatCurrency(totClawback)}</div>
             </div>
         `;
+
+        const mcEl = document.getElementById('mcSummary');
+        if (monteCarloEnabled && monteCarloResults) {
+            const failRate = 1 - monteCarloResults.successRate;
+            const depText = monteCarloResults.medianDepletionAge === null ? 'No depletion in failed paths' : `Age ${Math.round(monteCarloResults.medianDepletionAge)}`;
+            const runAt = monteCarloMeta && monteCarloMeta.runAtIso ? new Date(monteCarloMeta.runAtIso).toLocaleString() : 'Unknown';
+            const seedText = monteCarloMeta && monteCarloMeta.seed !== null ? monteCarloMeta.seed : 'Random';
+            const staleLine = monteCarloStale ? '<span style="color:#b45309; font-weight:600;">Results are from a previous run. Click Run Simulation to refresh.</span>' : '<span style="color:#166534;">Results are current with shown inputs.</span>';
+            const partialLine = monteCarloResults.cancelled ? `<span style="color:#b45309; font-weight:600;">Partial run: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials completed.</span>` : '';
+            mcEl.innerHTML = [
+                '<strong>Monte Carlo Summary:</strong>',
+                `Trials completed: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()}`,
+                `Success probability: ${(monteCarloResults.successRate * 100).toFixed(1)}%`,
+                `Failure probability: ${(failRate * 100).toFixed(1)}%`,
+                `Median depletion age (failed paths): ${depText}`,
+                `Final estate (P10 / Median / P90): ${formatCurrency(monteCarloResults.p10FinalEstate)} / ${formatCurrency(monteCarloResults.medianFinalEstate)} / ${formatCurrency(monteCarloResults.p90FinalEstate)}`,
+                `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
+                `Last run: ${runAt}`,
+                `Settings used (trials / return vol / inflation vol / seed): ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
+                partialLine,
+                staleLine
+            ].join('<br>');
+            mcEl.style.display = 'block';
+        } else {
+            mcEl.style.display = 'none';
+            mcEl.innerHTML = '';
+        }
 
         const debugMode = document.getElementById('debugMode').value;
         const debugEl = document.getElementById('debugSummary');
@@ -986,6 +1395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- INITIALIZATION ---
     loadInputs();
     loadSpendingSchedule();
+    updateMonteCarloSettingsVisibility();
 
     const schedContainer = document.getElementById('spendingScheduleRows');
     const addSchedBtn = document.getElementById('addSpendingRow');
@@ -1002,7 +1412,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             schedContainer.appendChild(createSpendingScheduleRow(nextStart, 100, nextAmount));
             saveSpendingSchedule();
-            calculateRetirement();
+            recalculateForUiChange();
         });
     }
 
@@ -1013,14 +1423,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (rows.length <= 1) return;
                 e.target.closest('.spending-row').remove();
                 saveSpendingSchedule();
-                calculateRetirement();
+                recalculateForUiChange();
             }
         });
 
         schedContainer.addEventListener('change', (e) => {
             if (e.target.classList.contains('sched-start') || e.target.classList.contains('sched-end') || e.target.classList.contains('sched-amount')) {
                 saveSpendingSchedule();
-                calculateRetirement();
+                recalculateForUiChange();
             }
         });
     }
@@ -1029,6 +1439,7 @@ document.addEventListener("DOMContentLoaded", () => {
     inputIds.forEach(id => {
         const el = document.getElementById(id);
         if(el) el.addEventListener('change', () => {
+            if (id === 'enableMonteCarlo') updateMonteCarloSettingsVisibility();
             if (id === 'age' || id === 'spending') {
                 const rows = document.querySelectorAll('#spendingScheduleRows .spending-row');
                 if (rows.length === 1) {
@@ -1038,16 +1449,28 @@ document.addEventListener("DOMContentLoaded", () => {
                     saveSpendingSchedule();
                 }
             }
-            calculateRetirement();
+            recalculateForUiChange();
         });
     });
 
     // Bind the button
     const runBtn = document.getElementById('calcBtn');
-    if(runBtn) runBtn.addEventListener('click', calculateRetirement);
+    if(runBtn) runBtn.addEventListener('click', () => calculateRetirement(true));
+    const stopBtn = document.getElementById('stopBtn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+            if (!mcIsRunning) return;
+            mcCancelRequested = true;
+            const runStatusEl = document.getElementById('runStatus');
+            if (runStatusEl) {
+                runStatusEl.style.color = '#b45309';
+                runStatusEl.innerText = 'Stopping Monte Carlo after current batch...';
+            }
+        });
+    }
 
     // Run initial calculation
-    calculateRetirement();
+    calculateRetirement(false);
 });
 </script>
 
