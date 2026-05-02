@@ -65,6 +65,8 @@
 
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .spending-row { display: grid; grid-template-columns: 90px 90px 1fr; gap: 8px; }
+        .spending-row label { white-space: nowrap; }
         .form-group { margin-bottom: 12px; }
         
         label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
@@ -153,6 +155,12 @@
                 <div class="form-row">
                     <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
                     <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
+                </div>
+                <div class="form-group" style="margin-top: 6px;">
+                    <label>Optional Spending Schedule (today's dollars)</label>
+                    <div id="spendingScheduleRows" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <button type="button" id="addSpendingRow" style="margin-top:8px; padding:8px; font-size:0.9rem;">Add Spending Phase</button>
+                    <div id="spendingScheduleStatus" style="margin-top:6px; font-size:0.8rem; color:#64748b;"></div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label>Inflation Rate (%)</label><input type="number" id="inflation" value="2.5" step="0.1"></div>
@@ -322,6 +330,110 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function createSpendingScheduleRow(startAge, endAge, amount) {
+        const row = document.createElement('div');
+        row.className = 'spending-row';
+        row.innerHTML = `
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Start Age</label>
+                <input type="number" class="sched-start" min="0" max="120" value="${startAge}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>End Age</label>
+                <input type="number" class="sched-end" min="0" max="120" value="${endAge}">
+            </div>
+            <div class="form-group" style="margin-bottom:0; display:flex; gap:6px; align-items:flex-end;">
+                <div style="flex:1;">
+                    <label>Net Spend/Yr</label>
+                    <input type="number" class="sched-amount" min="0" value="${amount}">
+                </div>
+                <button type="button" class="remove-spending-row" title="Remove phase" aria-label="Remove phase" style="width:30px; min-width:30px; height:36px; margin-top:0; padding:0; font-size:1rem; line-height:1; display:flex; align-items:center; justify-content:center; background:#64748b;">×</button>
+            </div>
+        `;
+        return row;
+    }
+
+    function saveSpendingSchedule() {
+        try {
+            const rows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row')).map(row => ({
+                startAge: parseInt(row.querySelector('.sched-start').value),
+                endAge: parseInt(row.querySelector('.sched-end').value),
+                amount: parseFloat(row.querySelector('.sched-amount').value)
+            }));
+            localStorage.setItem('retirePlanner_spendingSchedule', JSON.stringify(rows));
+        } catch (e) {
+            console.warn("Local storage unavailable", e);
+        }
+    }
+
+    function loadSpendingSchedule() {
+        const container = document.getElementById('spendingScheduleRows');
+        container.innerHTML = '';
+
+        let rows = null;
+        try {
+            const raw = localStorage.getItem('retirePlanner_spendingSchedule');
+            if (raw) rows = JSON.parse(raw);
+        } catch (e) {
+            console.warn("Spending schedule load failed", e);
+        }
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            const currentAge = parseInt(document.getElementById('age').value) || 60;
+            const spend = parseFloat(document.getElementById('spending').value) || 60000;
+            container.appendChild(createSpendingScheduleRow(currentAge, 100, spend));
+            return;
+        }
+
+        rows.forEach(r => {
+            const startAge = Number.isFinite(r.startAge) ? r.startAge : 60;
+            const endAge = Number.isFinite(r.endAge) ? r.endAge : 100;
+            const amount = Number.isFinite(r.amount) ? r.amount : 60000;
+            container.appendChild(createSpendingScheduleRow(startAge, endAge, amount));
+        });
+    }
+
+    function getValidatedSpendingSchedule() {
+        const statusEl = document.getElementById('spendingScheduleStatus');
+        const rawRows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row')).map(row => ({
+            startAge: parseInt(row.querySelector('.sched-start').value),
+            endAge: parseInt(row.querySelector('.sched-end').value),
+            amount: parseFloat(row.querySelector('.sched-amount').value)
+        }));
+
+        const cleaned = rawRows.filter(r => Number.isFinite(r.startAge) && Number.isFinite(r.endAge) && Number.isFinite(r.amount));
+        if (cleaned.length === 0) {
+            statusEl.style.color = '#b91c1c';
+            statusEl.innerText = 'No valid schedule rows found. Using default Desired Net Spend/Yr.';
+            return [];
+        }
+
+        cleaned.sort((a, b) => a.startAge - b.startAge);
+
+        for (let i = 0; i < cleaned.length; i++) {
+            if (cleaned[i].startAge > cleaned[i].endAge) {
+                statusEl.style.color = '#b91c1c';
+                statusEl.innerText = 'Each row needs Start Age <= End Age. Using default Desired Net Spend/Yr.';
+                return [];
+            }
+            if (i > 0 && cleaned[i].startAge <= cleaned[i - 1].endAge) {
+                statusEl.style.color = '#b91c1c';
+                statusEl.innerText = 'Spending schedule rows overlap. Using default Desired Net Spend/Yr.';
+                return [];
+            }
+        }
+
+        statusEl.style.color = '#166534';
+        statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? '' : 's'}.`;
+        return cleaned;
+    }
+
+    function getBaseSpendingForAge(currentAge, defaultSpending, schedule) {
+        if (!Array.isArray(schedule) || schedule.length === 0) return defaultSpending;
+        const row = schedule.find(r => currentAge >= r.startAge && currentAge <= r.endAge);
+        return row ? row.amount : defaultSpending;
+    }
+
     // --- 2024 TAX ENGINE ---
     const provData = {
         'ON': { bpa: 12399, lowestRate: 0.0505, brackets:[{limit: 51446, rate: 0.0505}, {limit: 102894, rate: 0.0915}, {limit: 150000, rate: 0.1116}, {limit: 220000, rate: 0.1216}, {limit: Infinity, rate: 0.1316}] },
@@ -423,6 +535,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentAcb > nonreg) { currentAcb = nonreg; document.getElementById('nonregAcb').value = nonreg; }
 
         const baseSpending = parseFloat(document.getElementById('spending').value);
+        const spendingSchedule = getValidatedSpendingSchedule();
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         const growth = parseFloat(document.getElementById('growth').value) / 100;
         const provCode = document.getElementById('province').value;
@@ -441,7 +554,8 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 0; age + i <= 100; i++) {
             let currentAge = age + i;
             let inflationFactor = Math.pow(1 + inflation, i);
-            let targetSpending = baseSpending * inflationFactor;
+            let ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
+            let targetSpending = ageBaseSpending * inflationFactor;
             
             let totalIncomeTaxThisYear = 0;
             let oasClawbackThisYear = 0;
@@ -813,11 +927,61 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- INITIALIZATION ---
     loadInputs();
+    loadSpendingSchedule();
+
+    const schedContainer = document.getElementById('spendingScheduleRows');
+    const addSchedBtn = document.getElementById('addSpendingRow');
+    if (addSchedBtn) {
+        addSchedBtn.addEventListener('click', () => {
+            const lastRow = schedContainer.querySelector('.spending-row:last-child');
+            let nextStart = parseInt(document.getElementById('age').value) || 60;
+            let nextAmount = parseFloat(document.getElementById('spending').value) || 60000;
+            if (lastRow) {
+                const prevEnd = parseInt(lastRow.querySelector('.sched-end').value);
+                const prevAmt = parseFloat(lastRow.querySelector('.sched-amount').value);
+                if (Number.isFinite(prevEnd)) nextStart = Math.min(prevEnd + 1, 100);
+                if (Number.isFinite(prevAmt)) nextAmount = prevAmt;
+            }
+            schedContainer.appendChild(createSpendingScheduleRow(nextStart, 100, nextAmount));
+            saveSpendingSchedule();
+            calculateRetirement();
+        });
+    }
+
+    if (schedContainer) {
+        schedContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-spending-row')) {
+                const rows = schedContainer.querySelectorAll('.spending-row');
+                if (rows.length <= 1) return;
+                e.target.closest('.spending-row').remove();
+                saveSpendingSchedule();
+                calculateRetirement();
+            }
+        });
+
+        schedContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('sched-start') || e.target.classList.contains('sched-end') || e.target.classList.contains('sched-amount')) {
+                saveSpendingSchedule();
+                calculateRetirement();
+            }
+        });
+    }
     
     // Bind all inputs safely inside the script, avoiding global scope issues
     inputIds.forEach(id => {
         const el = document.getElementById(id);
-        if(el) el.addEventListener('change', calculateRetirement);
+        if(el) el.addEventListener('change', () => {
+            if (id === 'age' || id === 'spending') {
+                const rows = document.querySelectorAll('#spendingScheduleRows .spending-row');
+                if (rows.length === 1) {
+                    const r = rows[0];
+                    if (id === 'age') r.querySelector('.sched-start').value = el.value;
+                    if (id === 'spending') r.querySelector('.sched-amount').value = el.value;
+                    saveSpendingSchedule();
+                }
+            }
+            calculateRetirement();
+        });
     });
 
     // Bind the button
