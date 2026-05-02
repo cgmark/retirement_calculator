@@ -82,24 +82,41 @@
 
         button:hover { background-color: #1d4ed8; }
 
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
         .summary-box { background: var(--section-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
         .summary-box.highlight { background: #e0f2fe; border-color: #7dd3fc; }
         .summary-box.alert { background: #fee2e2; border-color: #fca5a5; }
         .summary-title { font-size: 0.8rem; font-weight: 600; color: #475569; text-transform: uppercase; margin-bottom: 5px; }
         .summary-value { font-size: 1.4rem; font-weight: 700; color: var(--text); }
 
-        .table-container { overflow-x: auto; margin-top: 20px;}
+        .table-container { margin-top: 20px; }
+        .yearly-table-scroll {
+            overflow: auto;
+            resize: vertical;
+            min-height: 260px;
+            height: 440px;
+            max-height: 80vh;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }
         th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
         th { background-color: var(--section-bg); font-weight: 600; }
+        thead tr:first-child th { position: sticky; top: 0; z-index: 3; }
+        thead tr:nth-child(2) th { position: sticky; top: 43px; z-index: 4; }
         th:last-child, td:last-child { border-right: none; }
         th:first-child, td:first-child { text-align: center; font-weight: bold; }
         .group-header { text-align: center; background-color: #e2e8f0; border-bottom: 2px solid #cbd5e1; }
         .depleted { color: #ef4444; font-weight: bold; }
         .text-bold { font-weight: bold; }
 
-        @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } .chart-wrapper { height: 300px; } }
+        @media (max-width: 1200px) { .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 900px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .chart-wrapper { height: 300px; }
+            .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) { .summary-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -119,6 +136,14 @@
                     <select id="displayMode">
                         <option value="real" selected>Today's Dollars (Inflation discounted)</option>
                         <option value="nominal">Future Dollars (Nominal/Inflated)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Diagnostics</label>
+                    <select id="debugMode">
+                        <option value="off" selected>Off</option>
+                        <option value="on">Show Debug Summary</option>
+                        <option value="table">Show Debug Table</option>
                     </select>
                 </div>
             </div>
@@ -211,47 +236,50 @@
                 <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem;" id="chart2Title">Gross Income Sources vs Net Target</h3>
                 <div class="chart-wrapper"><canvas id="incomeChart"></canvas></div>
             </div>
-        </div>
-    </div>
 
-    <!-- Summary Box -->
-    <div class="card">
-        <h3 style="margin-top: 0; margin-bottom: 15px;">Lifetime Summary Totals <span id="summarySubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
-        <div class="summary-grid" id="summaryGrid">
-            <!-- Injected via JS -->
+            <!-- Summary Box -->
+            <div class="card">
+                <h3 style="margin-top: 0; margin-bottom: 15px;">Lifetime Summary Totals <span id="summarySubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
+                <div class="summary-grid" id="summaryGrid">
+                    <!-- Injected via JS -->
+                </div>
+                <div id="debugSummary" style="display:none; margin-top:12px; padding:12px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; font-size:0.85rem;"></div>
+            </div>
         </div>
     </div>
 
     <!-- Data Table -->
     <div class="card table-container">
         <h3 style="margin-top: 0; margin-bottom: 10px;">Yearly Breakdown <span id="tableSubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
-        <table>
-            <thead>
-                <tr>
-                    <th rowspan="2">Age</th>
-                    <th rowspan="2">Target Spend<br>(Net)</th>
-                    <th colspan="5" class="group-header">Gross Withdrawals & Income Sources</th>
-                    <th colspan="2" class="group-header">Taxes</th>
-                    <th colspan="4" class="group-header">End of Year Balances</th>
-                </tr>
-                <tr>
-                    <th>CPP</th>
-                    <th>OAS</th>
-                    <th>RRSP Draw</th>
-                    <th>TFSA Draw</th>
-                    <th>Non-Reg Draw</th>
-                    <th style="color:#ef4444;">Income Tax</th>
-                    <th style="color:#ef4444;">OAS Clawback</th>
-                    <th>RRSP</th>
-                    <th>TFSA</th>
-                    <th>Non-Reg (ACB)</th>
-                    <th>Total Assets</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <!-- Rows injected via JS -->
-            </tbody>
-        </table>
+        <div class="yearly-table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2">Age</th>
+                        <th rowspan="2">Target Spend<br>(Net)</th>
+                        <th colspan="5" class="group-header">Gross Withdrawals & Income Sources</th>
+                        <th colspan="2" class="group-header">Taxes</th>
+                        <th colspan="4" class="group-header">End of Year Balances</th>
+                    </tr>
+                    <tr>
+                        <th>CPP</th>
+                        <th>OAS</th>
+                        <th>RRSP Draw</th>
+                        <th>TFSA Draw</th>
+                        <th>Non-Reg Draw</th>
+                        <th style="color:#ef4444;">Income Tax</th>
+                        <th style="color:#ef4444;">OAS Clawback</th>
+                        <th>RRSP</th>
+                        <th>TFSA</th>
+                        <th>Non-Reg (ACB)</th>
+                        <th>Total Assets</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Rows injected via JS -->
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -261,7 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let incomeChartInst = null;
 
     const inputIds =[
-        'displayMode', 'age', 'spending', 'inflation', 'growth', 'province',
+        'displayMode', 'debugMode', 'age', 'spending', 'inflation', 'growth', 'province',
         'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
         'cppScenario', 'oasPercent', 'strategy'
     ];
@@ -417,6 +445,8 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let totalIncomeTaxThisYear = 0;
             let oasClawbackThisYear = 0;
+            let debugClawbackIterations = 0;
+            let debugFinalTaxableIncome = 0;
 
             let grossCPP = 0, grossOAS = 0;
             let drawRRSP = 0, drawTFSA = 0, drawNonReg = 0;
@@ -488,19 +518,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentTaxableIncome += rrspTaxFreeDraw;
             }
 
-            if (strategy === 'proportional') {
-                let tot = rrsp + tfsa + nonreg;
-                if (tot > 0) {
-                    let pRRSP = rrsp / tot; 
-                    let pTFSA = tfsa / tot; 
-                    let pNonReg = nonreg / tot;
-                    
-                    let needNetToSplit = netNeeded; 
-                    executeDraw('tfsa', needNetToSplit * pTFSA);
-                    executeDraw('nonreg', needNetToSplit * pNonReg);
-                    executeDraw('rrsp', needNetToSplit * pRRSP);['nonreg', 'tfsa', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
+            const executeByStrategy = (targetNet) => {
+                if (targetNet <= 0 || netNeeded <= 0) return;
+
+                if (strategy === 'proportional') {
+                    for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
+                        let tot = rrsp + tfsa + nonreg;
+                        if (tot <= 0) break;
+
+                        let pRRSP = rrsp / tot;
+                        let pTFSA = tfsa / tot;
+                        let pNonReg = nonreg / tot;
+                        let needNetToSplit = netNeeded;
+
+                        executeDraw('tfsa', needNetToSplit * pTFSA);
+                        executeDraw('nonreg', needNetToSplit * pNonReg);
+                        executeDraw('rrsp', needNetToSplit * pRRSP);
+                    }
+                } else {
+                    const sequences = {
+                        'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
+                        'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
+                        'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
+                        'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
+                    };
+                    sequences[strategy].forEach(acc => executeDraw(acc, targetNet));
                 }
-            } else {
+            };
+
+            executeByStrategy(netNeeded);
+
+            if (strategy !== 'proportional' && netNeeded > 0.01) {
                 const sequences = {
                     'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
                     'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
@@ -512,25 +560,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (grossOAS > 0) {
                 let oasThreshold = 90997 * inflationFactor;
-                if (currentTaxableIncome > oasThreshold) {
-                    let clawback = (currentTaxableIncome - oasThreshold) * 0.15;
-                    clawback = Math.min(clawback, grossOAS); 
-                    oasClawbackThisYear = clawback;
-                    
-                    netNeeded = clawback; 
-                    if (strategy === 'proportional') {
-                        ['nonreg', 'tfsa', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
-                    } else {
-                        const sequences = {
-                            'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
-                            'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
-                            'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
-                            'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
-                        };
-                        sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                let prevClawback = 0;
+
+                for (let k = 0; k < 10; k++) {
+                    debugClawbackIterations = k + 1;
+                    let clawback = 0;
+                    if (currentTaxableIncome > oasThreshold) {
+                        clawback = (currentTaxableIncome - oasThreshold) * 0.15;
                     }
+                    clawback = Math.min(clawback, grossOAS);
+
+                    let deltaClawback = clawback - prevClawback;
+                    if (deltaClawback <= 0.01) {
+                        oasClawbackThisYear = clawback;
+                        break;
+                    }
+
+                    netNeeded = deltaClawback;
+                    executeByStrategy(netNeeded);
+                    oasClawbackThisYear = clawback;
+
+                    if (netNeeded > 0.01) break;
+                    prevClawback = clawback;
                 }
             }
+
+            debugFinalTaxableIncome = currentTaxableIncome;
 
             let totalAssets = rrsp + tfsa + nonreg;
             if (netNeeded > 1) isDepleted = true;
@@ -551,6 +606,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 total: totalAssets,
                 incomeTax: totalIncomeTaxThisYear,
                 oasClawback: oasClawbackThisYear,
+                netShortfall: netNeeded,
+                taxableIncome: debugFinalTaxableIncome,
+                clawbackIterations: debugClawbackIterations,
                 depleted: isDepleted
             });
 
@@ -638,6 +696,65 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="summary-value">${formatCurrency(totClawback)}</div>
             </div>
         `;
+
+        const debugMode = document.getElementById('debugMode').value;
+        const debugEl = document.getElementById('debugSummary');
+        if (debugMode === 'on' || debugMode === 'table') {
+            let maxTaxable = 0;
+            let maxShortfall = 0;
+            let maxClawbackIterations = 0;
+            let yearsWithClawback = 0;
+
+            results.forEach(r => {
+                if (r.taxableIncome > maxTaxable) maxTaxable = r.taxableIncome;
+                if (r.netShortfall > maxShortfall) maxShortfall = r.netShortfall;
+                if (r.clawbackIterations > maxClawbackIterations) maxClawbackIterations = r.clawbackIterations;
+                if (r.oasClawback > 0) yearsWithClawback++;
+            });
+
+            const finalRowDebug = results[results.length - 1];
+            const debugLines = [
+                `<strong>Debug Summary:</strong>`,
+                `Max taxable income in any year: ${formatCurrency(adj(maxTaxable, 0))}`,
+                `Years with OAS clawback: ${yearsWithClawback}`,
+                `Max OAS clawback iterations used in a year: ${maxClawbackIterations}`,
+                `Ending-year unmet net need: ${formatCurrency(adj(finalRowDebug.netShortfall, finalRowDebug.yearIndex))}`,
+                `Max unmet net need in any year: ${formatCurrency(adj(maxShortfall, 0))}`
+            ];
+
+            if (debugMode === 'table') {
+                const rows = results.map(r => `
+                    <tr>
+                        <td style="text-align:center;">${r.age}</td>
+                        <td>${formatCurrency(adj(r.taxableIncome, r.yearIndex))}</td>
+                        <td>${formatCurrency(adj(r.oasClawback, r.yearIndex))}</td>
+                        <td style="text-align:center;">${r.clawbackIterations}</td>
+                        <td>${formatCurrency(adj(r.netShortfall, r.yearIndex))}</td>
+                    </tr>
+                `).join('');
+
+                debugLines.push(
+                    `<div style="margin-top:10px; overflow-x:auto;">` +
+                    `<table style="width:100%; border-collapse:collapse; font-size:0.82rem; white-space:nowrap;">` +
+                    `<thead><tr>` +
+                    `<th style="text-align:center; border-bottom:1px solid #cbd5e1; padding:6px;">Age</th>` +
+                    `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">Taxable Income</th>` +
+                    `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">OAS Clawback</th>` +
+                    `<th style="text-align:center; border-bottom:1px solid #cbd5e1; padding:6px;">Iterations</th>` +
+                    `<th style="text-align:right; border-bottom:1px solid #cbd5e1; padding:6px;">Unmet Net Need</th>` +
+                    `</tr></thead>` +
+                    `<tbody>${rows}</tbody>` +
+                    `</table>` +
+                    `</div>`
+                );
+            }
+
+            debugEl.innerHTML = debugLines.join('<br>');
+            debugEl.style.display = 'block';
+        } else {
+            debugEl.style.display = 'none';
+            debugEl.innerHTML = '';
+        }
 
         // --- CHARTS ---
         const labels = results.map(r => r.age);
