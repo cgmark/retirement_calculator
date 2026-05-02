@@ -148,6 +148,7 @@
                     <div class="form-group"><label>Current Age</label><input type="number" id="age" value="60"></div>
                     <div class="form-group"><label>Desired Net Spend/Yr</label><input type="number" id="spending" value="60000"></div>
                 </div>
+                <div class="form-group"><label>Life Expectancy (Age)</label><input type="number" id="lifeExpectancy" value="100" min="60" max="120"></div>
                 <div class="form-group" style="margin-top: 6px;">
                     <label>Optional Spending Schedule (today's dollars)</label>
                     <div id="spendingScheduleRows" style="display:flex; flex-direction:column; gap:8px;"></div>
@@ -286,6 +287,12 @@
                 <div class="chart-wrapper"><canvas id="incomeChart"></canvas></div>
             </div>
 
+            <div class="card" id="mcOutcomeCard" style="display:none;">
+                <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem;">Monte Carlo Outcome Distribution</h3>
+                <div id="mcChartSubtitle" style="font-size:0.82rem; color:#64748b; margin-bottom:10px;"></div>
+                <div class="chart-wrapper"><canvas id="mcOutcomeChart"></canvas></div>
+            </div>
+
             <!-- Summary Box -->
             <div class="card">
                 <h3 style="margin-top: 0; margin-bottom: 15px;">Lifetime Summary Totals <span id="summarySubtitle" style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span></h3>
@@ -337,13 +344,14 @@
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
     let incomeChartInst = null;
+    let mcOutcomeChartInst = null;
     let lastMonteCarloResults = null;
     let lastMonteCarloMeta = null;
     let mcCancelRequested = false;
     let mcIsRunning = false;
 
     const inputIds =[
-        'displayMode', 'debugMode', 'age', 'spending', 'inflation', 'growth', 'province',
+        'displayMode', 'debugMode', 'age', 'spending', 'lifeExpectancy', 'inflation', 'growth', 'province',
         'rrsp', 'tfsa', 'nonreg', 'nonregAcb', 'cpp60', 'cpp65', 'cpp70', 
         'cppScenario', 'oasPercent', 'rrifStartAge', 'enforceRrifMin', 'strategy',
         'enableMonteCarlo', 'mcTrials', 'mcVolatility', 'mcInflationVolatility', 'mcSeed'
@@ -433,8 +441,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!Array.isArray(rows) || rows.length === 0) {
             const currentAge = parseInt(document.getElementById('age').value) || 60;
+            const lifeExpectancy = parseInt(document.getElementById('lifeExpectancy').value) || 100;
             const spend = parseFloat(document.getElementById('spending').value) || 60000;
-            container.appendChild(createSpendingScheduleRow(currentAge, 100, spend));
+            container.appendChild(createSpendingScheduleRow(currentAge, lifeExpectancy, spend));
             return;
         }
 
@@ -448,13 +457,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getValidatedSpendingSchedule() {
         const statusEl = document.getElementById('spendingScheduleStatus');
+        const currentAge = parseInt(document.getElementById('age').value) || 60;
+        const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
         const rawRows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row')).map(row => ({
             startAge: parseInt(row.querySelector('.sched-start').value),
             endAge: parseInt(row.querySelector('.sched-end').value),
             amount: parseFloat(row.querySelector('.sched-amount').value)
         }));
 
-        const cleaned = rawRows.filter(r => Number.isFinite(r.startAge) && Number.isFinite(r.endAge) && Number.isFinite(r.amount));
+        let wasClamped = false;
+        const cleaned = rawRows
+            .filter(r => Number.isFinite(r.startAge) && Number.isFinite(r.endAge) && Number.isFinite(r.amount))
+            .map(r => {
+                const next = { ...r };
+                const clampedStart = Math.max(currentAge, Math.min(lifeExpectancy, next.startAge));
+                const clampedEnd = Math.max(currentAge, Math.min(lifeExpectancy, next.endAge));
+                if (clampedStart !== next.startAge || clampedEnd !== next.endAge) wasClamped = true;
+                next.startAge = clampedStart;
+                next.endAge = clampedEnd;
+                return next;
+            });
         if (cleaned.length === 0) {
             statusEl.style.color = '#b91c1c';
             statusEl.innerText = 'No valid schedule rows found. Using default Desired Net Spend/Yr.';
@@ -476,8 +498,22 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        if (wasClamped) {
+            const rowEls = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row'));
+            cleaned.forEach((r, idx) => {
+                const rowEl = rowEls[idx];
+                if (!rowEl) return;
+                rowEl.querySelector('.sched-start').value = r.startAge;
+                rowEl.querySelector('.sched-end').value = r.endAge;
+            });
+            saveSpendingSchedule();
+            statusEl.style.color = '#b45309';
+            statusEl.innerText = `Schedule ages were clamped to current age (${currentAge}) and life expectancy (${lifeExpectancy}).`;
+            return cleaned;
+        }
+
         statusEl.style.color = '#166534';
-        statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? '' : 's'}.`;
+        statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? '' : 's'} through age ${lifeExpectancy}.`;
         return cleaned;
     }
 
@@ -613,12 +649,24 @@ document.addEventListener("DOMContentLoaded", () => {
         return sorted[idx];
     }
 
+    function getDepletionBucket(age) {
+        if (age < 65) return 'Before 65';
+        if (age <= 69) return '65-69';
+        if (age <= 74) return '70-74';
+        if (age <= 79) return '75-79';
+        if (age <= 84) return '80-84';
+        if (age <= 89) return '85-89';
+        if (age <= 94) return '90-94';
+        if (age <= 99) return '95-99';
+        return '100+';
+    }
+
     async function runMonteCarlo(params) {
         const {
             age, rrspStart, tfsaStart, nonregStart, acbStart,
             baseSpending, spendingSchedule, inflation, growth,
             provCode, cppScenarioAge, selectedCPPMonthly, oasPercent,
-            rrifStartAge, enforceRrifMin, strategy, trials, volatility, inflationVolatility, seed, onProgress, shouldCancel
+            rrifStartAge, enforceRrifMin, strategy, projectionAge, trials, volatility, inflationVolatility, seed, onProgress, shouldCancel
         } = params;
 
         const rng = Number.isFinite(seed) ? createSeededRng(seed) : Math.random;
@@ -627,6 +675,9 @@ document.addEventListener("DOMContentLoaded", () => {
         let totalClawback = 0;
         const finalEstates = [];
         const depletionAges = [];
+        const successBucketLabel = `${projectionAge}+ (Success)`;
+        const bucketLabels = ['Before 65', '65-69', '70-74', '75-79', '80-84', '85-89', '90-94', '95-99', successBucketLabel];
+        const bucketCounts = Object.fromEntries(bucketLabels.map(b => [b, 0]));
         let completedTrials = 0;
         let cancelled = false;
 
@@ -646,7 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
             let thisClawback = 0;
             let mcInflationFactor = 1;
 
-            for (let i = 0; age + i <= 100; i++) {
+            for (let i = 0; age + i <= projectionAge; i++) {
                 const currentAge = age + i;
                 const inflationFactor = mcInflationFactor;
                 const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
@@ -785,8 +836,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 mcInflationFactor *= (1 + yearlyInflation);
             }
 
-            if (!depleted) successCount++;
-            else depletionAges.push(finalAge);
+            if (!depleted) {
+                successCount++;
+                bucketCounts[successBucketLabel]++;
+            } else {
+                depletionAges.push(finalAge);
+                const b = getDepletionBucket(finalAge);
+                if (bucketCounts[b] !== undefined) bucketCounts[b]++;
+            }
 
             finalEstates.push(rrsp + tfsa + nonreg);
             totalTax += thisTax;
@@ -810,7 +867,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 p10FinalEstate: 0,
                 p90FinalEstate: 0,
                 medianDepletionAge: null,
-                cancelled
+                cancelled,
+                bucketLabels,
+                bucketCounts
             };
         }
 
@@ -824,7 +883,9 @@ document.addEventListener("DOMContentLoaded", () => {
             p10FinalEstate: percentile(finalEstates, 10),
             p90FinalEstate: percentile(finalEstates, 90),
             medianDepletionAge: depletionAges.length ? percentile(depletionAges, 50) : null,
-            cancelled
+            cancelled,
+            bucketLabels,
+            bucketCounts
         };
     }
 
@@ -844,6 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const baseSpending = parseFloat(document.getElementById('spending').value);
         const spendingSchedule = getValidatedSpendingSchedule();
+        const lifeExpectancy = Math.max(age, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         const growth = parseFloat(document.getElementById('growth').value) / 100;
         const provCode = document.getElementById('province').value;
@@ -867,7 +929,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const results =[];
         let isDepleted = false;
 
-        for (let i = 0; age + i <= 100; i++) {
+        for (let i = 0; age + i <= lifeExpectancy; i++) {
             let currentAge = age + i;
             let inflationFactor = Math.pow(1 + inflation, i);
             let ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
@@ -1097,6 +1159,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     rrifStartAge,
                     enforceRrifMin,
                     strategy,
+                    projectionAge: lifeExpectancy,
                     trials: mcTrials,
                     volatility: mcVolatility,
                     inflationVolatility: mcInflationVolatility,
@@ -1270,6 +1333,49 @@ document.addEventListener("DOMContentLoaded", () => {
             mcEl.innerHTML = '';
         }
 
+        const mcCard = document.getElementById('mcOutcomeCard');
+        const mcSubtitle = document.getElementById('mcChartSubtitle');
+        if (mcOutcomeChartInst) {
+            mcOutcomeChartInst.destroy();
+            mcOutcomeChartInst = null;
+        }
+        if (monteCarloEnabled && monteCarloResults && monteCarloResults.trials > 0) {
+            mcCard.style.display = 'block';
+            const bucketLabels = monteCarloResults.bucketLabels || [];
+            const counts = bucketLabels.map(l => monteCarloResults.bucketCounts?.[l] || 0);
+            const percents = counts.map(c => (c / monteCarloResults.trials) * 100);
+            mcSubtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? ' (partial run)' : ''}`;
+            mcOutcomeChartInst = new Chart(document.getElementById('mcOutcomeChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: bucketLabels,
+                    datasets: [{
+                        label: 'Trial Share (%)',
+                        data: percents,
+                        backgroundColor: bucketLabels.map(l => l.includes('(Success)') ? '#16a34a' : '#f59e0b')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { maxRotation: 0, minRotation: 0 } },
+                        y: { beginAtZero: true, ticks: { callback: (v) => `${v}%` } }
+                    }
+                }
+            });
+        } else {
+            mcCard.style.display = 'none';
+            mcSubtitle.innerText = '';
+        }
+
         const debugMode = document.getElementById('debugMode').value;
         const debugEl = document.getElementById('debugSummary');
         if (debugMode === 'on' || debugMode === 'table') {
@@ -1403,14 +1509,15 @@ document.addEventListener("DOMContentLoaded", () => {
         addSchedBtn.addEventListener('click', () => {
             const lastRow = schedContainer.querySelector('.spending-row:last-child');
             let nextStart = parseInt(document.getElementById('age').value) || 60;
+            const lifeExpectancy = parseInt(document.getElementById('lifeExpectancy').value) || 100;
             let nextAmount = parseFloat(document.getElementById('spending').value) || 60000;
             if (lastRow) {
                 const prevEnd = parseInt(lastRow.querySelector('.sched-end').value);
                 const prevAmt = parseFloat(lastRow.querySelector('.sched-amount').value);
-                if (Number.isFinite(prevEnd)) nextStart = Math.min(prevEnd + 1, 100);
+                if (Number.isFinite(prevEnd)) nextStart = Math.min(prevEnd + 1, lifeExpectancy);
                 if (Number.isFinite(prevAmt)) nextAmount = prevAmt;
             }
-            schedContainer.appendChild(createSpendingScheduleRow(nextStart, 100, nextAmount));
+            schedContainer.appendChild(createSpendingScheduleRow(nextStart, lifeExpectancy, nextAmount));
             saveSpendingSchedule();
             recalculateForUiChange();
         });
@@ -1440,12 +1547,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const el = document.getElementById(id);
         if(el) el.addEventListener('change', () => {
             if (id === 'enableMonteCarlo') updateMonteCarloSettingsVisibility();
-            if (id === 'age' || id === 'spending') {
+            if (id === 'age' || id === 'spending' || id === 'lifeExpectancy') {
                 const rows = document.querySelectorAll('#spendingScheduleRows .spending-row');
                 if (rows.length === 1) {
                     const r = rows[0];
                     if (id === 'age') r.querySelector('.sched-start').value = el.value;
                     if (id === 'spending') r.querySelector('.sched-amount').value = el.value;
+                    if (id === 'lifeExpectancy') r.querySelector('.sched-end').value = el.value;
                     saveSpendingSchedule();
                 }
             }
