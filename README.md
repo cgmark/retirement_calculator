@@ -2,6 +2,13 @@
 
 This project currently runs as a single HTML file: `retirement.html`.
 
+## Quick Start
+
+- `make run` - start local dev server at `http://127.0.0.1:8080/retirement.html`
+- `make test` - run unit tests
+- `make build` - build `dist/retirement.single.html`
+- `make licenses` - regenerate `THIRD_PARTY_LICENSES.txt`
+
 ## Local Tooling
 
 - `npm test` - run unit tests for extracted core logic helpers
