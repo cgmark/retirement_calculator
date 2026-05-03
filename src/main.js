@@ -228,6 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let completedTrials = 0;
         let cancelled = false;
 
+        // Process MC trials in chunks so the UI can update progress/cancel state between batches.
         const chunkSize = 25;
         for (let t = 0; t < trials; t++) {
             if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -365,6 +366,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 executeByStrategy();
 
                 if (grossOAS > 0) {
+                    // OAS clawback and withdrawals form a feedback loop: extra draw can increase taxable income
+                    // and therefore clawback, so iterate until the incremental clawback stabilizes.
                     const oasThreshold = 90997 * inflationFactor;
                     let prevClawback = 0;
                     for (let k = 0; k < 10; k++) {
@@ -439,6 +442,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         partialP90
                     );
                 }
+                // Yield to the event loop to keep the page responsive during long runs.
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
@@ -908,6 +912,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             };
 
+            // Approximate taxable-income ceiling where calculated tax is still effectively zero,
+            // then use remaining room for low-friction RRSP draw before strategy withdrawals.
             let maxTaxFreeInc = 0;
             let low = 0, high = 50000 * inflationFactor;
             for(let j=0; j<20; j++) {
@@ -1067,6 +1073,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         return { totalTax, totalClaw, finalEstate, totalShortfall };
                     };
 
+                    // Coarse-to-fine search over TFSA/Non-Reg/RRSP mix weights for this age year.
                     const evaluateCandidates = (step, centerMix = null, radius = 1) => {
                         const candidates = [];
                         const tfsaMin = centerMix ? Math.max(0, centerMix.tfsa - radius) : 0;
@@ -1129,6 +1136,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     let candidates;
                     if (dominantSingleObjective) {
+                        // Fast path: when one objective dominates, test a compact set of anchor mixes.
                         // Fast path when one objective dominates (e.g., Maximize Estate = 100)
                         candidates = [
                             { mix: { tfsa: 1, nonreg: 0, rrsp: 0 } },
@@ -1173,6 +1181,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     if (candidates.length) scoreCandidates(candidates);
                     if (!dominantSingleObjective) {
+                        // Refine around the best coarse candidate for a better local solution.
                         const refined = evaluateCandidates(0.10, bestMix, 0.2);
                         if (refined.length) scoreCandidates(refined);
                     }
@@ -1228,6 +1237,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (grossOAS > 0) {
+                // Same iterative clawback solve in deterministic mode.
                 let oasThreshold = 90997 * inflationFactor;
                 let prevClawback = 0;
 
@@ -1290,6 +1300,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const totalYears = Math.max(1, lifeExpectancy - age + 1);
                 runStatusEl.style.color = '#0369a1';
                 runStatusEl.innerText = `Constructing advanced policy: year ${i + 1}/${totalYears} (age ${currentAge})`;
+                // Yield to keep progress text/controls responsive during advanced-policy construction.
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
 
@@ -1388,6 +1399,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 requestedTrials: monteCarloResults.requestedTrials
             };
         } else if (enableMonteCarlo && !runMonteCarloNow) {
+            // Intentionally keep the last MC run visible until the user explicitly reruns simulation.
             if (runStatusEl) {
                 runStatusEl.style.color = '#64748b';
                 runStatusEl.innerText = 'Monte Carlo inputs changed. Click Run Simulation to refresh probability results.';
