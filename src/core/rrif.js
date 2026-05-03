@@ -1,5 +1,8 @@
 export function getRrifMinimumRate(age) {
   if (age < 71) return 0;
+  // CRA prescribed RRIF minimum withdrawal factors by age (71-94),
+  // with age 95+ using the standard 20% minimum factor.
+  // Reference: Canada Revenue Agency RRIF minimum withdrawal factors.
   const rates = {
     71: 0.0528,
     72: 0.054,

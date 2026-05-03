@@ -44,6 +44,8 @@ export function calculateTax(income, provCode, inflFactor) {
   provTax -= provBPA * pData.lowestRate;
   if (provTax < 0) provTax = 0;
 
+  // Ontario applies provincial surtax on top of basic ON provincial tax.
+  // Thresholds are inflation-adjusted here to stay consistent with the rest of the model.
   if (provCode === "ON") {
     const s1 = 5315 * inflFactor;
     const s2 = 6802 * inflFactor;
