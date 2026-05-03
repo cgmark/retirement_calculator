@@ -2422,6 +2422,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (id === 'enableMonteCarlo') updateMonteCarloSettingsVisibility();
             if (id === 'strategy' || id === 'strategyMode') updateOutcomeSettingsVisibility();
             if (id === 'spendingMode') updateSpendingModeVisibility();
+
+            if (id === 'strategyMode' && document.getElementById('strategyMode')?.value === 'advanced') {
+                saveInputs();
+                deferOutcomeBasedExecutionNotice();
+                return;
+            }
+
             if (id === 'age' || id === 'spending' || id === 'lifeExpectancy') {
                 const rows = document.querySelectorAll('#spendingScheduleRows .spending-row');
                 if (rows.length === 1) {
