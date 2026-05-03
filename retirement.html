@@ -74,7 +74,10 @@
         .segmented-toggle button { margin: 0; border: none; border-radius: 0; padding: 8px; background: #f8fafc; color: #334155; font-size: 0.9rem; }
         .segmented-toggle button.active { background: #0f766e; color: #fff; }
         .form-group { margin-bottom: 12px; }
-        
+        .input-section.collapsible h4 { cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+        .input-section.collapsible h4::after { content: '\25BE'; font-size: 0.75rem; color: #64748b; }
+        .input-section.collapsible.collapsed h4::after { content: '\25B8'; }
+
         label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
 
         input, select {
@@ -961,7 +964,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if ((t + 1) % chunkSize === 0 || t === trials - 1) {
                 if (typeof onProgress === 'function') {
                     const partialP10 = assetsByYear.map(v => percentile(v, 10));
+                    const partialP25 = assetsByYear.map(v => percentile(v, 25));
                     const partialP50 = assetsByYear.map(v => percentile(v, 50));
+                    const partialP75 = assetsByYear.map(v => percentile(v, 75));
                     const partialP90 = assetsByYear.map(v => percentile(v, 90));
                     onProgress(
                         completedTrials,
@@ -970,7 +975,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         { ...bucketCounts },
                         ageLabels,
                         partialP10,
+                        partialP25,
                         partialP50,
+                        partialP75,
                         partialP90
                     );
                 }
@@ -994,13 +1001,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 bucketCounts,
                 ageLabels,
                 assetP10: [],
+                assetP25: [],
                 assetP50: [],
+                assetP75: [],
                 assetP90: []
             };
         }
 
         const assetP10 = assetsByYear.map(v => percentile(v, 10));
+        const assetP25 = assetsByYear.map(v => percentile(v, 25));
         const assetP50 = assetsByYear.map(v => percentile(v, 50));
+        const assetP75 = assetsByYear.map(v => percentile(v, 75));
         const assetP90 = assetsByYear.map(v => percentile(v, 90));
 
         return {
@@ -1018,7 +1029,9 @@ document.addEventListener("DOMContentLoaded", () => {
             bucketCounts,
             ageLabels,
             assetP10,
+            assetP25,
             assetP50,
+            assetP75,
             assetP90
         };
     }
@@ -1150,39 +1163,63 @@ document.addEventListener("DOMContentLoaded", () => {
             return v / Math.pow(1 + baseInflation, idx);
         });
         const p10 = adjustSeries(monteCarloResults.assetP10);
+        const p25 = adjustSeries(monteCarloResults.assetP25);
         const p50 = adjustSeries(monteCarloResults.assetP50);
+        const p75 = adjustSeries(monteCarloResults.assetP75);
         const p90 = adjustSeries(monteCarloResults.assetP90);
 
-        const data = {
-            labels,
-            datasets: [
-                {
-                    label: 'P10',
-                    data: p10,
-                    borderColor: '#f59e0b',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: false
-                },
-                {
-                    label: 'P50',
-                    data: p50,
-                    borderColor: '#0f766e',
-                    borderWidth: 2.5,
-                    pointRadius: 0,
-                    fill: false
-                },
-                {
-                    label: 'P90',
-                    data: p90,
-                    borderColor: '#2563eb',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: '-1',
-                    backgroundColor: 'rgba(37,99,235,0.12)'
-                }
-            ]
-        };
+        const datasets = [
+            {
+                label: 'P10',
+                data: p10,
+                borderColor: '#f59e0b',
+                borderWidth: 1.2,
+                pointRadius: 0,
+                fill: false
+            }
+        ];
+
+        datasets.push(
+            {
+                label: 'P25',
+                data: p25,
+                borderColor: '#0ea5a4',
+                borderWidth: 1.2,
+                pointRadius: 0,
+                fill: false
+            },
+            {
+                label: 'P75',
+                data: p75,
+                borderColor: '#0ea5a4',
+                borderWidth: 1.2,
+                pointRadius: 0,
+                fill: '-1',
+                backgroundColor: 'rgba(14,165,164,0.18)'
+            }
+        );
+
+        datasets.push(
+            {
+                label: 'P50',
+                data: p50,
+                borderColor: '#0f766e',
+                borderWidth: 2.5,
+                pointRadius: 0,
+                fill: false
+            },
+            {
+                label: 'P90',
+                data: p90,
+                borderColor: '#2563eb',
+                borderWidth: 1.2,
+                pointRadius: 0,
+                fill: '-1',
+                backgroundColor: 'rgba(37,99,235,0.10)'
+            }
+        );
+
+        const data = { labels, datasets };
 
         const options = {
             responsive: true,
@@ -1841,7 +1878,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     inflationVolatility: mcInflationVolatility,
                     seed: mcSeed,
                     constructedMixByAge: effectiveStrategy === 'outcome-based' ? constructedMixByAge : null,
-                    onProgress: (done, total, bucketLabels, bucketCounts, ageLabels, assetP10, assetP50, assetP90) => {
+                    onProgress: (done, total, bucketLabels, bucketCounts, ageLabels, assetP10, assetP25, assetP50, assetP75, assetP90) => {
                         if (runStatusEl) {
                             const pct = ((done / total) * 100).toFixed(0);
                             runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
@@ -1854,7 +1891,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             bucketCounts,
                             ageLabels,
                             assetP10,
+                            assetP25,
                             assetP50,
+                            assetP75,
                             assetP90
                         };
                         renderMonteCarloOutcomeChart(partialResults);
@@ -1985,6 +2024,58 @@ document.addEventListener("DOMContentLoaded", () => {
             el.disabled = !isCustom;
             el.style.backgroundColor = isCustom ? '#fff' : '#f1f5f9';
             el.style.cursor = isCustom ? 'text' : 'not-allowed';
+        });
+    }
+
+    function setupCollapsibleSections() {
+        let saved = {};
+        try {
+            saved = JSON.parse(localStorage.getItem('retirePlanner_sectionState') || '{}');
+        } catch (e) {
+            saved = {};
+        }
+
+        const defaultOpen = {
+            'Basic Info & Taxes': false,
+            'Current Assets ($)': false,
+            'Canada Pension Plan (CPP)': false,
+            'Old Age Security (OAS)': false,
+            'RRIF Minimum Withdrawals': false,
+            'Withdrawal Strategy': true,
+            'Monte Carlo Simulation ?': true,
+            'Display Options': false
+        };
+
+        const sections = Array.from(document.querySelectorAll('.input-section'));
+        sections.forEach(section => {
+            const h4 = section.querySelector('h4');
+            if (!h4) return;
+            section.classList.add('collapsible');
+            const title = h4.textContent.trim();
+            const key = title;
+
+            let body = section.querySelector(':scope > .section-body');
+            if (!body) {
+                body = document.createElement('div');
+                body.className = 'section-body';
+                const children = Array.from(section.children).filter(el => el !== h4);
+                children.forEach(el => body.appendChild(el));
+                section.appendChild(body);
+            }
+
+            const isOpen = Object.prototype.hasOwnProperty.call(saved, key) ? !!saved[key] : !!defaultOpen[title];
+            body.style.display = isOpen ? 'block' : 'none';
+            section.classList.toggle('collapsed', !isOpen);
+
+            h4.addEventListener('click', () => {
+                const nowOpen = section.classList.contains('collapsed');
+                section.classList.toggle('collapsed', !nowOpen);
+                body.style.display = nowOpen ? 'block' : 'none';
+                saved[key] = nowOpen;
+                try {
+                    localStorage.setItem('retirePlanner_sectionState', JSON.stringify(saved));
+                } catch (e) {}
+            });
         });
     }
 
@@ -2313,6 +2404,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --- INITIALIZATION ---
+    setupCollapsibleSections();
     loadInputs();
     loadSpendingSchedule();
     updateMonteCarloSettingsVisibility();
