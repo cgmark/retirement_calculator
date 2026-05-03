@@ -6,6 +6,7 @@ This project currently runs as a single HTML file: `retirement.html`.
 
 - `npm test` - run unit tests for extracted core logic helpers
 - `npm run build:single` - produce `dist/retirement.single.html`
+- `npm run licenses` - generate `THIRD_PARTY_LICENSES.txt` for production deps
 
 ## Why this setup exists
 
@@ -18,3 +19,8 @@ Current extracted modules:
 - `src/core/random.js`
 
 These mirror logic used in `retirement.html` and are covered by tests. The runtime HTML is intentionally unchanged during this first step to reduce risk.
+
+## Third-party licensing
+
+The built single-file app bundles third-party code (for example, Chart.js under MIT).
+Run `npm run licenses` to regenerate `THIRD_PARTY_LICENSES.txt` with current production dependency license metadata.

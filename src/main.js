@@ -1,3 +1,4 @@
+import Chart from "chart.js/auto";
 import { calculateTax, findGrossDraw } from "./core/tax.js";
 import { getRrifMinimumRate } from "./core/rrif.js";
 import { createSeededRng, randomNormal, percentile } from "./core/random.js";

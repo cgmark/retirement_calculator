@@ -1,0 +1,10 @@
+Third-Party Licenses
+Generated from production dependencies
+
+@kurkle/color@0.3.4
+  License: MIT
+  Source: https://github.com/kurkle/color#readme
+
+chart.js@4.5.1
+  License: MIT
+  Source: https://www.chartjs.org

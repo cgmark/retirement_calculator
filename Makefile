@@ -1,4 +1,4 @@
-.PHONY: help test build run
+.PHONY: help test build run licenses
 
 .DEFAULT_GOAL := help
 
@@ -13,3 +13,6 @@ build: ## Build single-file HTML
 
 run: ## Start local dev server
 	npm run dev
+
+licenses: ## Generate third-party license report
+	npm run licenses
