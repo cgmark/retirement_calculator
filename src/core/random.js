@@ -1,4 +1,5 @@
 export function createSeededRng(seed) {
+  // Mulberry32 PRNG: fast, deterministic, and good enough for UI Monte Carlo use.
   let s = seed >>> 0;
   return function rng() {
     s += 0x6d2b79f5;
@@ -9,6 +10,7 @@ export function createSeededRng(seed) {
 }
 
 export function randomNormal(rng) {
+  // Box-Muller transform from uniform(0,1) -> standard normal N(0,1).
   let u = 0;
   let v = 0;
   while (u === 0) u = rng();
@@ -18,7 +20,11 @@ export function randomNormal(rng) {
 
 export function percentile(values, p) {
   if (!values.length) return 0;
+  // Nearest-rank style index keeps outputs stable across reruns/tests.
   const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.max(0, Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))));
+  const idx = Math.max(
+    0,
+    Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))),
+  );
   return sorted[idx];
 }

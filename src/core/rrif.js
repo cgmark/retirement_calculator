@@ -27,7 +27,7 @@ export function getRrifMinimumRate(age) {
     91: 0.1306,
     92: 0.1449,
     93: 0.1634,
-    94: 0.1879
+    94: 0.1879,
   };
   if (age >= 95) return 0.2;
   return rates[age] || 0;

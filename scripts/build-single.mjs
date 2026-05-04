@@ -16,7 +16,7 @@ await build({
   target: ["es2020"],
   outfile: tempBundle,
   minify: false,
-  sourcemap: false
+  sourcemap: false,
 });
 
 const html = await readFile(sourceHtml, "utf8");

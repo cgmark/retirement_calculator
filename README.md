@@ -6,6 +6,7 @@ This project currently runs as a single HTML file: `retirement.html`.
 
 - `make run` - start local dev server at `http://127.0.0.1:8080/retirement.html`
 - `make test` - run unit tests
+- `npm run lint` - run static checks (including missing imports/identifiers)
 - `make build` - build `dist/retirement.single.html`
 - `make licenses` - regenerate `THIRD_PARTY_LICENSES.txt`
 

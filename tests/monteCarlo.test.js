@@ -1,0 +1,73 @@
+import { describe, expect, it } from "vitest";
+import { runMonteCarlo } from "../src/core/monteCarlo.js";
+
+function baseParams(overrides = {}) {
+  return {
+    age: 65,
+    rrspStart: 450000,
+    tfsaStart: 180000,
+    nonregStart: 90000,
+    acbStart: 60000,
+    baseSpending: 55000,
+    spendingSchedule: [],
+    inflation: 0.02,
+    growth: 0.05,
+    provCode: "ON",
+    cppScenarioAge: 65,
+    selectedCPPMonthly: 1200,
+    oasPercent: 1,
+    rrifStartAge: 72,
+    enforceRrifMin: true,
+    strategy: "tfsa-rrsp-nonreg",
+    projectionAge: 92,
+    trials: 120,
+    volatility: 0.12,
+    inflationVolatility: 0.01,
+    seed: 123,
+    ...overrides,
+  };
+}
+
+describe("runMonteCarlo", () => {
+  it("is deterministic with fixed seed", async () => {
+    const params = baseParams({ seed: 42, trials: 140 });
+    const a = await runMonteCarlo(params);
+    const b = await runMonteCarlo(params);
+
+    expect(b).toEqual(a);
+  });
+
+  it("returns expected output shape", async () => {
+    const res = await runMonteCarlo(baseParams({ seed: 99, trials: 90 }));
+
+    expect(res.trials).toBeGreaterThan(0);
+    expect(res.requestedTrials).toBe(90);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
+    expect(Array.isArray(res.bucketLabels)).toBe(true);
+    expect(Array.isArray(res.ageLabels)).toBe(true);
+    expect(res.ageLabels.length).toBe(92 - 65 + 1);
+    expect(res.assetP10.length).toBe(res.ageLabels.length);
+    expect(res.assetP50.length).toBe(res.ageLabels.length);
+    expect(res.assetP90.length).toBe(res.ageLabels.length);
+    expect(
+      res.bucketLabels.every((label) =>
+        Number.isFinite(res.bucketCounts[label]),
+      ),
+    ).toBe(true);
+  });
+
+  it("supports cancellation with partial results", async () => {
+    let checks = 0;
+    const shouldCancel = () => {
+      checks += 1;
+      return checks > 3;
+    };
+
+    const res = await runMonteCarlo(baseParams({ trials: 200, shouldCancel }));
+
+    expect(res.cancelled).toBe(true);
+    expect(res.trials).toBeGreaterThan(0);
+    expect(res.trials).toBeLessThan(res.requestedTrials);
+  });
+});

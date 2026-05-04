@@ -1,11 +1,14 @@
-.PHONY: help test build run licenses
+.PHONY: help lint test build run licenses
 
 .DEFAULT_GOAL := help
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; print "Available targets:"} /^[a-zA-Z_-]+:.*##/ {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-test: ## Run unit tests
+lint: ## Run static analysis
+	npm run lint
+
+test: lint ## Run unit tests
 	npm test
 
 build: ## Build single-file HTML
