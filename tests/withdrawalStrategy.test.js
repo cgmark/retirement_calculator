@@ -99,4 +99,42 @@ describe("withdrawal strategy helpers", () => {
     expect(calls[0][0]).toBe("rrsp");
     if (calls.length > 1) expect(calls[1][0]).toBe("nonreg");
   });
+
+  it("early-retirement +20% requests more RRSP headroom than base", () => {
+    const baseCalls = [];
+    const plusCalls = [];
+
+    const setupRunner = (calls, overshootPct) => {
+      let netNeeded = 20000;
+      let taxableIncome = 50000;
+      const balances = { rrsp: 100000, tfsa: 100000, nonreg: 100000 };
+      const executeDraw = (acc, targetNet) => {
+        calls.push([acc, targetNet]);
+        const used = Math.min(netNeeded, targetNet);
+        if (acc === "rrsp") taxableIncome += used;
+        if (acc === "rrsp") balances.rrsp -= used;
+        if (acc === "nonreg") balances.nonreg -= used;
+        if (acc === "tfsa") balances.tfsa -= used;
+        netNeeded = Math.max(0, netNeeded - used);
+      };
+
+      applyEarlyRetirementDraw({
+        getBalances: () => balances,
+        getNetNeeded: () => netNeeded,
+        getCurrentTaxableIncome: () => taxableIncome,
+        getGrossOAS: () => 0,
+        executeDraw,
+        provCode: "ON",
+        inflationFactor: 1,
+        overshootPct,
+      });
+    };
+
+    setupRunner(baseCalls, 0);
+    setupRunner(plusCalls, 0.2);
+
+    const baseRrspTarget = baseCalls.find((c) => c[0] === "rrsp")?.[1] ?? 0;
+    const plusRrspTarget = plusCalls.find((c) => c[0] === "rrsp")?.[1] ?? 0;
+    expect(plusRrspTarget).toBeGreaterThan(baseRrspTarget);
+  });
 });

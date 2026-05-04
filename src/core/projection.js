@@ -217,7 +217,17 @@ export async function runDeterministicProjection(params) {
           executeDraw,
           mix: normalizedMix,
         });
-      } else if (effectiveStrategy === "early-retirement") {
+      } else if (
+        effectiveStrategy === "early-retirement" ||
+        effectiveStrategy === "early-retirement-plus10" ||
+        effectiveStrategy === "early-retirement-plus20"
+      ) {
+        const overshootPct =
+          effectiveStrategy === "early-retirement-plus20"
+            ? 0.2
+            : effectiveStrategy === "early-retirement-plus10"
+              ? 0.1
+              : 0;
         applyEarlyRetirementDraw({
           getBalances: () => ({ rrsp, tfsa, nonreg }),
           getNetNeeded: () => netNeeded,
@@ -226,6 +236,7 @@ export async function runDeterministicProjection(params) {
           executeDraw,
           provCode,
           inflationFactor,
+          overshootPct,
         });
       } else {
         applySequenceDraw({
@@ -243,6 +254,8 @@ export async function runDeterministicProjection(params) {
       effectiveStrategy !== "proportional" &&
       effectiveStrategy !== "outcome-based" &&
       effectiveStrategy !== "early-retirement" &&
+      effectiveStrategy !== "early-retirement-plus10" &&
+      effectiveStrategy !== "early-retirement-plus20" &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({
