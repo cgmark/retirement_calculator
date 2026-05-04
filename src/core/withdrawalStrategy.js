@@ -66,3 +66,50 @@ export function applyWeightedMixDraw({
     );
   }
 }
+
+export function applyEarlyRetirementDraw({
+  getBalances,
+  getNetNeeded,
+  getCurrentTaxableIncome,
+  getGrossOAS,
+  executeDraw,
+  provCode,
+  inflationFactor,
+}) {
+  if (getNetNeeded() <= 0) return;
+
+  const balances = getBalances();
+  const taxableIncome = getCurrentTaxableIncome();
+  const bracketLimit = getNextCombinedBracketLimit(
+    taxableIncome,
+    provCode,
+    inflationFactor,
+  );
+
+  // Fill current combined bracket with RRSP first.
+  const rrspHeadroom = Math.max(0, bracketLimit - taxableIncome);
+  if (rrspHeadroom > 0 && balances.rrsp > 0) {
+    executeDraw("rrsp", Math.min(getNetNeeded(), rrspHeadroom));
+  }
+
+  if (getNetNeeded() <= 0) return;
+
+  // Prefer non-reg for remainder in early-retirement mode.
+  executeDraw("nonreg", getNetNeeded());
+  if (getNetNeeded() <= 0) return;
+
+  // If taxable income is above OAS threshold, favor TFSA for remaining marginal need.
+  const oasThreshold = 90997 * inflationFactor;
+  const hasOAS = getGrossOAS() > 0;
+  const aboveClawback = getCurrentTaxableIncome() > oasThreshold;
+  if (hasOAS && aboveClawback && getBalances().tfsa > 0) {
+    executeDraw("tfsa", getNetNeeded());
+  }
+
+  if (getNetNeeded() > 0) {
+    executeDraw("rrsp", getNetNeeded());
+    executeDraw("nonreg", getNetNeeded());
+    executeDraw("tfsa", getNetNeeded());
+  }
+}
+import { getNextCombinedBracketLimit } from "./tax.js";

@@ -5,6 +5,7 @@ import {
   applyProportionalDraw,
   applyWeightedMixDraw,
   applySequenceDraw,
+  applyEarlyRetirementDraw,
 } from "./withdrawalStrategy.js";
 import { chooseOutcomeMix } from "./outcomeStrategy.js";
 
@@ -216,6 +217,16 @@ export async function runDeterministicProjection(params) {
           executeDraw,
           mix: normalizedMix,
         });
+      } else if (effectiveStrategy === "early-retirement") {
+        applyEarlyRetirementDraw({
+          getBalances: () => ({ rrsp, tfsa, nonreg }),
+          getNetNeeded: () => netNeeded,
+          getCurrentTaxableIncome: () => currentTaxableIncome,
+          getGrossOAS: () => grossOAS,
+          executeDraw,
+          provCode,
+          inflationFactor,
+        });
       } else {
         applySequenceDraw({
           strategy: effectiveStrategy,
@@ -231,6 +242,7 @@ export async function runDeterministicProjection(params) {
     if (
       effectiveStrategy !== "proportional" &&
       effectiveStrategy !== "outcome-based" &&
+      effectiveStrategy !== "early-retirement" &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({

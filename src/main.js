@@ -1121,6 +1121,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- CHARTS ---
     const labels = results.map((r) => r.age);
+    const effectiveTaxRatePct = results.map((r) => {
+      const spending = adj(r.spending, r.yearIndex);
+      const incomeTax = adj(r.incomeTax, r.yearIndex);
+      if (spending <= 0) return 0;
+      return (incomeTax / spending) * 100;
+    });
     const cssVar = (name) =>
       getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -1236,9 +1242,71 @@ document.addEventListener("DOMContentLoaded", () => {
               backgroundColor: cssVar("--color-nonreg"),
               order: 1,
             },
+            {
+              type: "line",
+              label: "OAS Clawback",
+              data: results.map((r) => adj(r.oasClawback, r.yearIndex)),
+              borderColor: "#dc2626",
+              borderWidth: 2,
+              borderDash: [4, 4],
+              fill: false,
+              pointRadius: 0,
+              yAxisID: "y",
+              order: 0,
+            },
+            {
+              type: "line",
+              label: "Effective Tax Rate",
+              data: effectiveTaxRatePct,
+              borderColor: "#b45309",
+              borderWidth: 2,
+              fill: false,
+              pointRadius: 0,
+              yAxisID: "y1",
+              order: 0,
+            },
           ],
         },
-        options: { ...sharedOptions },
+        options: {
+          ...sharedOptions,
+          plugins: {
+            ...sharedOptions.plugins,
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  const label = ctx.dataset.label || "";
+                  if (label === "Effective Tax Rate") {
+                    return `${label}: ${ctx.parsed.y.toFixed(1)}%`;
+                  }
+                  let valueLabel = label;
+                  if (valueLabel) valueLabel += ": ";
+                  if (ctx.parsed.y !== null) {
+                    valueLabel += new Intl.NumberFormat("en-CA", {
+                      style: "currency",
+                      currency: "CAD",
+                      maximumFractionDigits: 0,
+                    }).format(ctx.parsed.y);
+                  }
+                  return valueLabel;
+                },
+              },
+            },
+          },
+          scales: {
+            ...sharedOptions.scales,
+            y1: {
+              position: "right",
+              min: 0,
+              max: 60,
+              grid: { drawOnChartArea: false },
+              ticks: {
+                callback: function (v) {
+                  return `${Number(v).toFixed(0)}%`;
+                },
+              },
+            },
+          },
+        },
       },
     );
   }

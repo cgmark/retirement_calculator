@@ -6,6 +6,7 @@ import {
   applyProportionalDraw,
   applyWeightedMixDraw,
   applySequenceDraw,
+  applyEarlyRetirementDraw,
 } from "./withdrawalStrategy.js";
 
 function getDepletionBucket(age) {
@@ -220,6 +221,16 @@ export async function runMonteCarlo(params) {
             getNetNeeded: () => netNeeded,
             executeDraw,
             mix,
+          });
+        } else if (strategy === "early-retirement") {
+          applyEarlyRetirementDraw({
+            getBalances: () => ({ rrsp, tfsa, nonreg }),
+            getNetNeeded: () => netNeeded,
+            getCurrentTaxableIncome: () => currentTaxableIncome,
+            getGrossOAS: () => grossOAS,
+            executeDraw,
+            provCode,
+            inflationFactor,
           });
         } else {
           applySequenceDraw({
