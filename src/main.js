@@ -1,6 +1,6 @@
 import Chart from "chart.js/auto";
 import { runMonteCarlo } from "./core/monteCarlo.js";
-import { sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule, isFlatSchedule } from "./core/spending.js";
+import { sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
 import { solveSustainableSpending } from "./core/solveSpending.js";
 import { readScenarioInputs } from "./core/inputs.js";
@@ -512,8 +512,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 outcome.solvedSpendOutput,
                 outcome.targetSuccessRate,
                 outcome.spendingMode,
-                outcome.selectedStrategyMode,
-                outcome.effectiveStrategy
+                outcome.selectedStrategyMode
             );
         } finally {
             isRecalculating = false;
@@ -600,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let saved = {};
         try {
             saved = JSON.parse(localStorage.getItem('retirePlanner_sectionState') || '{}');
-        } catch (e) {
+        } catch {
             saved = {};
         }
 
@@ -643,7 +642,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 saved[key] = nowOpen;
                 try {
                     localStorage.setItem('retirePlanner_sectionState', JSON.stringify(saved));
-                } catch (e) {}
+                } catch {}
             });
         });
     }
@@ -705,19 +704,7 @@ document.addEventListener("DOMContentLoaded", () => {
         saveSpendingSchedule();
     }
 
-    function scheduleDiffersFromFlatCurrentSpend(spendOverride = null) {
-        const rows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row')).map((row) => ({
-            startAge: parseInt(row.querySelector('.sched-start').value),
-            endAge: parseInt(row.querySelector('.sched-end').value),
-            amount: parseFloat(row.querySelector('.sched-amount').value)
-        }));
-        const currentAge = parseInt(document.getElementById('age').value) || 60;
-        const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
-        const spend = Math.round(Number.isFinite(spendOverride) ? spendOverride : (parseFloat(document.getElementById('spending').value) || 0));
-        return !isFlatSchedule(rows, currentAge, lifeExpectancy, spend);
-    }
-
-    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy, effectiveStrategy) {
+    function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy) {
         // Presentation layer only: charts, table, summary cards, and explanatory copy.
         const displayInflated = document.getElementById('displayMode').checked;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
