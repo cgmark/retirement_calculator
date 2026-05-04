@@ -1,3 +1,5 @@
+import { getNextCombinedBracketLimit } from "./tax.js";
+
 const STRATEGY_SEQUENCES = {
   "tfsa-rrsp-nonreg": ["tfsa", "rrsp", "nonreg"],
   "tfsa-nonreg-rrsp": ["tfsa", "nonreg", "rrsp"],
@@ -75,6 +77,7 @@ export function applyEarlyRetirementDraw({
   executeDraw,
   provCode,
   inflationFactor,
+  overshootPct = 0,
 }) {
   if (getNetNeeded() <= 0) return;
 
@@ -88,8 +91,9 @@ export function applyEarlyRetirementDraw({
 
   // Fill current combined bracket with RRSP first.
   const rrspHeadroom = Math.max(0, bracketLimit - taxableIncome);
+  const rrspHeadroomWithOvershoot = rrspHeadroom * (1 + overshootPct);
   if (rrspHeadroom > 0 && balances.rrsp > 0) {
-    executeDraw("rrsp", Math.min(getNetNeeded(), rrspHeadroom));
+    executeDraw("rrsp", Math.min(getNetNeeded(), rrspHeadroomWithOvershoot));
   }
 
   if (getNetNeeded() <= 0) return;
@@ -112,4 +116,3 @@ export function applyEarlyRetirementDraw({
     executeDraw("tfsa", getNetNeeded());
   }
 }
-import { getNextCombinedBracketLimit } from "./tax.js";

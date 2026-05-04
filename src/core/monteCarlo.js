@@ -222,7 +222,17 @@ export async function runMonteCarlo(params) {
             executeDraw,
             mix,
           });
-        } else if (strategy === "early-retirement") {
+        } else if (
+          strategy === "early-retirement" ||
+          strategy === "early-retirement-plus10" ||
+          strategy === "early-retirement-plus20"
+        ) {
+          const overshootPct =
+            strategy === "early-retirement-plus20"
+              ? 0.2
+              : strategy === "early-retirement-plus10"
+                ? 0.1
+                : 0;
           applyEarlyRetirementDraw({
             getBalances: () => ({ rrsp, tfsa, nonreg }),
             getNetNeeded: () => netNeeded,
@@ -231,6 +241,7 @@ export async function runMonteCarlo(params) {
             executeDraw,
             provCode,
             inflationFactor,
+            overshootPct,
           });
         } else {
           applySequenceDraw({
