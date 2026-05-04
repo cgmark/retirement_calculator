@@ -3,6 +3,7 @@ import {
   applyProportionalDraw,
   applyWeightedMixDraw,
   applySequenceDraw,
+  applyEarlyRetirementDraw,
 } from "../src/core/withdrawalStrategy.js";
 
 describe("withdrawal strategy helpers", () => {
@@ -66,5 +67,36 @@ describe("withdrawal strategy helpers", () => {
     expect(calls[1][0]).toBe("nonreg");
     expect(calls[2][0]).toBe("rrsp");
     expect(calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("early-retirement draws rrsp then nonreg", () => {
+    const calls = [];
+    let netNeeded = 5000;
+    let taxableIncome = 50000;
+    const balances = { rrsp: 100000, tfsa: 100000, nonreg: 100000 };
+
+    const executeDraw = (acc, targetNet) => {
+      calls.push([acc, targetNet]);
+      const used = Math.min(netNeeded, targetNet);
+      if (acc === "rrsp") taxableIncome += used;
+      if (acc === "rrsp") balances.rrsp = Math.max(0, balances.rrsp - used);
+      if (acc === "nonreg")
+        balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
+      netNeeded = Math.max(0, netNeeded - used);
+    };
+
+    applyEarlyRetirementDraw({
+      getBalances: () => balances,
+      getNetNeeded: () => netNeeded,
+      getCurrentTaxableIncome: () => taxableIncome,
+      getGrossOAS: () => 0,
+      executeDraw,
+      provCode: "ON",
+      inflationFactor: 1,
+    });
+
+    expect(calls[0][0]).toBe("rrsp");
+    if (calls.length > 1) expect(calls[1][0]).toBe("nonreg");
   });
 });

@@ -211,3 +211,42 @@ export function findGrossDraw(
     taxableAdd: finalTaxAdd,
   };
 }
+
+const FEDERAL_BRACKETS_BASE = [55867, 111733, 173205, 246752];
+
+export function getNextFederalBracketLimit(currentTaxableIncome, inflFactor) {
+  const scaled = FEDERAL_BRACKETS_BASE.map((v) => v * inflFactor);
+  for (const limit of scaled) {
+    if (currentTaxableIncome < limit) return limit;
+  }
+  return Infinity;
+}
+
+export function getNextProvincialBracketLimit(
+  currentTaxableIncome,
+  provCode,
+  inflFactor,
+) {
+  const pData = provData[provCode];
+  if (!pData) return Infinity;
+  for (const bracket of pData.brackets) {
+    if (bracket.limit === Infinity) continue;
+    const limit = bracket.limit * inflFactor;
+    if (currentTaxableIncome < limit) return limit;
+  }
+  return Infinity;
+}
+
+export function getNextCombinedBracketLimit(
+  currentTaxableIncome,
+  provCode,
+  inflFactor,
+) {
+  const fed = getNextFederalBracketLimit(currentTaxableIncome, inflFactor);
+  const prov = getNextProvincialBracketLimit(
+    currentTaxableIncome,
+    provCode,
+    inflFactor,
+  );
+  return Math.min(fed, prov);
+}

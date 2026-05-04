@@ -70,4 +70,13 @@ describe("runMonteCarlo", () => {
     expect(res.trials).toBeGreaterThan(0);
     expect(res.trials).toBeLessThan(res.requestedTrials);
   });
+
+  it("runs with early-retirement strategy", async () => {
+    const res = await runMonteCarlo(
+      baseParams({ strategy: "early-retirement", seed: 777, trials: 80 }),
+    );
+    expect(res.trials).toBe(80);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
+  });
 });
