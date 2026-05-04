@@ -3,6 +3,8 @@ import { runMonteCarlo } from "./core/monteCarlo.js";
 import { sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule, isFlatSchedule } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
 import { solveSustainableSpending } from "./core/solveSpending.js";
+import { readScenarioInputs } from "./core/inputs.js";
+import { runRetirementCalculation } from "./core/calculateRetirement.js";
 
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
@@ -361,253 +363,150 @@ document.addEventListener("DOMContentLoaded", () => {
         const stopBtn = document.getElementById('stopBtn');
 
         try {
+            const inputs = readScenarioInputs(document, getValidatedSpendingSchedule);
+            if (inputs.currentAcb > inputs.nonreg) {
+                const acbEl = document.getElementById('nonregAcb');
+                if (acbEl) acbEl.value = String(inputs.nonreg);
+            }
 
-        let age = parseInt(document.getElementById('age').value);
-        let rrsp = parseFloat(document.getElementById('rrsp').value);
-        let tfsa = parseFloat(document.getElementById('tfsa').value);
-        let nonreg = parseFloat(document.getElementById('nonreg').value);
-        let currentAcb = parseFloat(document.getElementById('nonregAcb').value);
-        
-        if (currentAcb > nonreg) { currentAcb = nonreg; document.getElementById('nonregAcb').value = nonreg; }
+            if (runBtn) {
+                runBtn.disabled = false;
+                runBtn.innerText = 'Run Simulation';
+            }
+            if (stopBtn) stopBtn.style.display = 'none';
 
-        let baseSpending = parseFloat(document.getElementById('spending').value);
-        const spendingSchedule = getValidatedSpendingSchedule();
-        const spendingMode = document.getElementById('spendingMode').value;
-        const targetSuccessRate = Math.max(0.5, Math.min(0.99, (parseFloat(document.getElementById('targetSuccess').value) || 90) / 100));
-        const solvePrecision = Math.max(10, parseFloat(document.getElementById('solvePrecision').value) || 100);
-        const lifeExpectancy = Math.max(age, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
-        const inflation = parseFloat(document.getElementById('inflation').value) / 100;
-        const growth = parseFloat(document.getElementById('growth').value) / 100;
-        const provCode = document.getElementById('province').value;
-        
-        const cppScenarioAge = parseInt(document.getElementById('cppScenario').value);
-        let selectedCPPMonthly = cppScenarioAge === 60 ? parseFloat(document.getElementById('cpp60').value) : 
-                                 cppScenarioAge === 70 ? parseFloat(document.getElementById('cpp70').value) : 
-                                 parseFloat(document.getElementById('cpp65').value);
-
-        const oasPercent = parseFloat(document.getElementById('oasPercent').value) / 100;
-        const rrifStartAge = parseInt(document.getElementById('rrifStartAge').value);
-        const enforceRrifMin = document.getElementById('enforceRrifMin').value === 'yes';
-        const strategy = document.getElementById('strategy').value;
-        const strategyMode = document.getElementById('strategyMode').value;
-        const selectedStrategyMode = strategyMode === 'advanced' ? 'outcome-based' : strategy;
-        const enableMonteCarlo = document.getElementById('enableMonteCarlo').checked;
-        const mcTrials = Math.max(100, Math.min(10000, parseInt(document.getElementById('mcTrials').value) || 1000));
-        const mcVolatility = Math.max(0, parseFloat(document.getElementById('mcVolatility').value) / 100 || 0);
-        const mcInflationVolatility = Math.max(0, parseFloat(document.getElementById('mcInflationVolatility').value) / 100 || 0);
-        const mcSeedRaw = document.getElementById('mcSeed').value;
-        const mcSeed = mcSeedRaw === '' ? NaN : parseInt(mcSeedRaw);
-
-        let solvedSpendOutput = null;
-
-        if (spendingMode === 'solve') {
-            if (!enableMonteCarlo) {
-                if (runStatusEl) {
-                    runStatusEl.style.color = '#b45309';
-                    runStatusEl.innerText = 'Enable Monte Carlo to solve sustainable spending.';
-                }
-            } else if (runMonteCarloNow) {
-                if (runStatusEl) {
+            const outcome = await runRetirementCalculation({
+                inputs,
+                runMonteCarloNow,
+                lastMonteCarloResults,
+                runMonteCarlo,
+                solveSustainableSpending,
+                runDeterministicProjection,
+                getNormalizedOutcomeWeights,
+                formatCurrency,
+                onSolveStart: () => {
+                    if (!runStatusEl) return;
                     runStatusEl.style.color = '#0369a1';
                     runStatusEl.innerText = 'Solving sustainable spending...';
-                }
-                const solved = await solveSustainableSpending({
-                    targetSuccessRate,
-                    precision: solvePrecision,
-                    maxIterations: 18,
-                    baselineSpend: baseSpending,
-                    monteCarloParams: {
-                        age,
-                        rrspStart: parseFloat(document.getElementById('rrsp').value),
-                        tfsaStart: parseFloat(document.getElementById('tfsa').value),
-                        nonregStart: parseFloat(document.getElementById('nonreg').value),
-                        acbStart: parseFloat(document.getElementById('nonregAcb').value),
-                        baseSpending,
-                        spendingSchedule: [],
-                        inflation,
-                        growth,
-                        provCode,
-                        cppScenarioAge,
-                        selectedCPPMonthly,
-                        oasPercent,
-                        rrifStartAge,
-                        enforceRrifMin,
-                        strategy,
-                        projectionAge: lifeExpectancy,
-                        trials: mcTrials,
-                        volatility: mcVolatility,
-                        inflationVolatility: mcInflationVolatility,
-                        seed: mcSeed,
-                        shouldCancel: () => mcCancelRequested
-                    },
-                    runMonteCarlo,
-                    formatCurrency,
-                    onIteration: (msg) => { if (runStatusEl) runStatusEl.innerText = msg; },
-                    shouldCancel: () => mcCancelRequested
-                });
-                if (solved !== null) {
-                    baseSpending = solved;
-                    solvedSpendOutput = solved;
-                    lastSolvedSpend = solved;
-                    const spendingEl = document.getElementById('spending');
-                    if (spendingEl) spendingEl.value = Math.round(solved);
-                }
-            }
-        }
+                },
+                onSolveIteration: (msg) => {
+                    if (!runStatusEl) return;
+                    runStatusEl.innerText = msg;
+                },
+                onAdvancedPolicyProgress: (ageAtYear) => {
+                    if (!runStatusEl) return;
+                    runStatusEl.style.color = '#0369a1';
+                    runStatusEl.innerText = `Constructing outcome-based policy: age ${ageAtYear}`;
+                    if (runBtn) {
+                        runBtn.disabled = true;
+                        runBtn.innerText = 'Optimizing...';
+                    }
+                },
+                onAdvancedYearProgress: async (yearIndex, ageAtYear, projectionAge, startAge) => {
+                    if (!runStatusEl) return;
+                    const totalYears = Math.max(1, projectionAge - startAge + 1);
+                    runStatusEl.style.color = '#0369a1';
+                    runStatusEl.innerText = `Constructing advanced policy: year ${yearIndex + 1}/${totalYears} (age ${ageAtYear})`;
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                },
+                onMonteCarloStart: (trials) => {
+                    if (runStatusEl) {
+                        runStatusEl.style.color = '#0369a1';
+                        runStatusEl.innerText = `Running Monte Carlo (${trials.toLocaleString()} trials)...`;
+                    }
+                    if (runBtn) {
+                        runBtn.disabled = true;
+                        runBtn.innerText = 'Running...';
+                    }
+                    if (stopBtn) stopBtn.style.display = 'block';
+                    mcCancelRequested = false;
+                    mcIsRunning = true;
+                },
+                onMonteCarloProgress: (done, total, bucketLabels, bucketCounts, ageLabels, assetP10, assetP25, assetP50, assetP75, assetP90) => {
+                    if (runStatusEl) {
+                        const pct = ((done / total) * 100).toFixed(0);
+                        runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
+                    }
+                    renderMonteCarloOutcomeChart({
+                        trials: done,
+                        requestedTrials: total,
+                        cancelled: false,
+                        bucketLabels,
+                        bucketCounts,
+                        ageLabels,
+                        assetP10,
+                        assetP25,
+                        assetP50,
+                        assetP75,
+                        assetP90
+                    });
+                    renderMonteCarloPercentileChart({
+                        trials: done,
+                        requestedTrials: total,
+                        cancelled: false,
+                        bucketLabels,
+                        bucketCounts,
+                        ageLabels,
+                        assetP10,
+                        assetP25,
+                        assetP50,
+                        assetP75,
+                        assetP90
+                    });
+                },
+                shouldCancel: () => mcCancelRequested
+            });
 
-        const activeSchedule = spendingMode === 'solve' ? [] : spendingSchedule;
-        let effectiveStrategy = selectedStrategyMode;
-        const showAdvancedProgress = selectedStrategyMode === 'outcome-based' && runMonteCarloNow;
-
-        if (showAdvancedProgress && runBtn) {
-            runBtn.disabled = true;
-            runBtn.innerText = 'Optimizing...';
-        }
-
-        const { results, constructedMixByAge } = await runDeterministicProjection({
-            age,
-            rrspStart: rrsp,
-            tfsaStart: tfsa,
-            nonregStart: nonreg,
-            acbStart: currentAcb,
-            baseSpending,
-            activeSchedule,
-            lifeExpectancy,
-            inflation,
-            growth,
-            provCode,
-            cppScenarioAge,
-            selectedCPPMonthly,
-            oasPercent,
-            rrifStartAge,
-            enforceRrifMin,
-            effectiveStrategy,
-            getNormalizedOutcomeWeights,
-            showAdvancedProgress,
-            onOutcomePolicyProgress: (ageAtYear) => {
-                if (!runStatusEl) return;
-                runStatusEl.style.color = '#0369a1';
-                runStatusEl.innerText = `Constructing outcome-based policy: age ${ageAtYear}`;
-            },
-            onAdvancedYearProgress: async (yearIndex, ageAtYear, projectionAge, startAge) => {
-                if (!runStatusEl) return;
-                const totalYears = Math.max(1, projectionAge - startAge + 1);
-                runStatusEl.style.color = '#0369a1';
-                runStatusEl.innerText = `Constructing advanced policy: year ${yearIndex + 1}/${totalYears} (age ${ageAtYear})`;
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-        });
-
-        let monteCarloResults = null;
-        let monteCarloStale = false;
-        if (enableMonteCarlo && runMonteCarloNow) {
-            if (runStatusEl) {
-                runStatusEl.style.color = '#0369a1';
-                runStatusEl.innerText = `Running Monte Carlo (${mcTrials.toLocaleString()} trials)...`;
-            }
+            mcIsRunning = false;
             if (runBtn) {
-                runBtn.disabled = true;
-                runBtn.innerText = 'Running...';
+                runBtn.disabled = false;
+                runBtn.innerText = 'Run Simulation';
             }
-            if (stopBtn) stopBtn.style.display = 'block';
-            mcCancelRequested = false;
-            mcIsRunning = true;
-            try {
-                monteCarloResults = await runMonteCarlo({
-                    age,
-                    rrspStart: parseFloat(document.getElementById('rrsp').value),
-                    tfsaStart: parseFloat(document.getElementById('tfsa').value),
-                    nonregStart: parseFloat(document.getElementById('nonreg').value),
-                    acbStart: parseFloat(document.getElementById('nonregAcb').value),
-                    baseSpending,
-                    spendingSchedule: activeSchedule,
-                    inflation,
-                    growth,
-                    provCode,
-                    cppScenarioAge,
-                    selectedCPPMonthly,
-                    oasPercent,
-                    rrifStartAge,
-                    enforceRrifMin,
-                    strategy: effectiveStrategy,
-                    projectionAge: lifeExpectancy,
-                    trials: mcTrials,
-                    volatility: mcVolatility,
-                    inflationVolatility: mcInflationVolatility,
-                    seed: mcSeed,
-                    constructedMixByAge: effectiveStrategy === 'outcome-based' ? constructedMixByAge : null,
-                    onProgress: (done, total, bucketLabels, bucketCounts, ageLabels, assetP10, assetP25, assetP50, assetP75, assetP90) => {
-                        if (runStatusEl) {
-                            const pct = ((done / total) * 100).toFixed(0);
-                            runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
-                        }
-                        const partialResults = {
-                            trials: done,
-                            requestedTrials: total,
-                            cancelled: false,
-                            bucketLabels,
-                            bucketCounts,
-                            ageLabels,
-                            assetP10,
-                            assetP25,
-                            assetP50,
-                            assetP75,
-                            assetP90
-                        };
-                        renderMonteCarloOutcomeChart(partialResults);
-                        renderMonteCarloPercentileChart(partialResults);
-                    },
-                    shouldCancel: () => mcCancelRequested
-                });
-            } finally {
-                mcIsRunning = false;
-                if (runBtn) {
-                    runBtn.disabled = false;
-                    runBtn.innerText = 'Run Simulation';
-                }
-                if (stopBtn) stopBtn.style.display = 'none';
-            }
-            if (runStatusEl) {
-                if (monteCarloResults.cancelled) {
+            if (stopBtn) stopBtn.style.display = 'none';
+
+            if (outcome.shouldPromptEnableMcForSolve && runStatusEl) {
+                runStatusEl.style.color = '#b45309';
+                runStatusEl.innerText = 'Enable Monte Carlo to solve sustainable spending.';
+            } else if (outcome.enableMonteCarlo && outcome.runMonteCarloNow && outcome.monteCarloResults && runStatusEl) {
+                if (outcome.monteCarloResults.cancelled) {
                     runStatusEl.style.color = '#b45309';
-                    runStatusEl.innerText = `Monte Carlo cancelled after ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials.`;
+                    runStatusEl.innerText = `Monte Carlo cancelled after ${outcome.monteCarloResults.trials.toLocaleString()} / ${outcome.monteCarloResults.requestedTrials.toLocaleString()} trials.`;
                 } else {
                     runStatusEl.style.color = '#166534';
-                    runStatusEl.innerText = `Monte Carlo complete: ${(monteCarloResults.successRate * 100).toFixed(1)}% success over ${monteCarloResults.trials.toLocaleString()} trials.`;
+                    runStatusEl.innerText = `Monte Carlo complete: ${(outcome.monteCarloResults.successRate * 100).toFixed(1)}% success over ${outcome.monteCarloResults.trials.toLocaleString()} trials.`;
                 }
-            }
-            lastMonteCarloResults = monteCarloResults;
-            lastMonteCarloMeta = {
-                trials: mcTrials,
-                returnVolatility: mcVolatility,
-                inflationVolatility: mcInflationVolatility,
-                seed: Number.isFinite(mcSeed) ? mcSeed : null,
-                runAtIso: new Date().toISOString(),
-                cancelled: monteCarloResults.cancelled,
-                completedTrials: monteCarloResults.trials,
-                requestedTrials: monteCarloResults.requestedTrials
-            };
-        } else if (enableMonteCarlo && !runMonteCarloNow) {
-            // Intentionally keep the last MC run visible until the user explicitly reruns simulation.
-            if (runStatusEl) {
+            } else if (outcome.enableMonteCarlo && !outcome.runMonteCarloNow && runStatusEl) {
                 runStatusEl.style.color = '#64748b';
                 runStatusEl.innerText = 'Monte Carlo inputs changed. Click Run Simulation to refresh probability results.';
+            } else if (runStatusEl) {
+                runStatusEl.style.color = '#64748b';
+                runStatusEl.innerText = 'Deterministic mode ready.';
             }
-            if (lastMonteCarloResults) {
-                monteCarloResults = lastMonteCarloResults;
-                monteCarloStale = true;
+
+            if (outcome.solvedSpendOutput !== null) {
+                lastSolvedSpend = outcome.solvedSpendOutput;
+                const spendingEl = document.getElementById('spending');
+                if (spendingEl) spendingEl.value = Math.round(outcome.solvedSpendOutput);
             }
-        } else if (runStatusEl) {
-            runStatusEl.style.color = '#64748b';
-            runStatusEl.innerText = 'Deterministic mode ready.';
-        }
+            if (outcome.monteCarloResults && outcome.enableMonteCarlo && outcome.runMonteCarloNow) {
+                lastMonteCarloResults = outcome.monteCarloResults;
+            }
+            if (outcome.monteCarloMeta) {
+                lastMonteCarloMeta = outcome.monteCarloMeta;
+            }
 
-        if (showAdvancedProgress && runBtn && !(enableMonteCarlo && runMonteCarloNow)) {
-            runBtn.disabled = false;
-            runBtn.innerText = 'Run Simulation';
-        }
-
-        updateUI(results, monteCarloResults, enableMonteCarlo, monteCarloStale, lastMonteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategyMode, effectiveStrategy);
+            updateUI(
+                outcome.results,
+                outcome.monteCarloResults,
+                outcome.enableMonteCarlo,
+                outcome.monteCarloStale,
+                lastMonteCarloMeta,
+                outcome.solvedSpendOutput,
+                outcome.targetSuccessRate,
+                outcome.spendingMode,
+                outcome.selectedStrategyMode,
+                outcome.effectiveStrategy
+            );
         } finally {
             isRecalculating = false;
             if (queuedRecalc !== null) {
