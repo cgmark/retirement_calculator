@@ -21,6 +21,7 @@ export function chooseOutcomeMix(params) {
         currentState
     } = params;
 
+    // Probe need smooths scoring so near-zero years do not produce noisy/degenerate mixes.
     const probeNeed = Math.max(250, params.probeNeed ?? 0);
     const available = ["tfsa", "nonreg", "rrsp"].filter((acc) => (acc === "tfsa" ? currentState.tfsa : acc === "nonreg" ? currentState.nonreg : currentState.rrsp) > 0);
     let bestMix = { tfsa: 1 / 3, nonreg: 1 / 3, rrsp: 1 / 3 };
@@ -30,6 +31,7 @@ export function chooseOutcomeMix(params) {
     const maxObjectiveWeight = Math.max(...objectiveWeights);
     const dominantSingleObjective = maxObjectiveWeight >= 0.95;
 
+    // Score one candidate mix by simulating from current year through horizon.
     const horizonScoreForMix = (mix) => {
         let sRrsp = currentState.rrsp;
         let sTfsa = currentState.tfsa;
@@ -140,6 +142,7 @@ export function chooseOutcomeMix(params) {
         return { totalTax, totalClaw, finalEstate, totalShortfall };
     };
 
+    // Coarse grid first; optional local refinement happens later around best mix.
     const evaluateCandidates = (step, centerMix = null, radius = 1) => {
         const candidates = [];
         const tfsaMin = centerMix ? Math.max(0, centerMix.tfsa - radius) : 0;
@@ -160,6 +163,7 @@ export function chooseOutcomeMix(params) {
 
     let candidates;
     if (dominantSingleObjective) {
+        // Fast path: anchors are enough when one objective weight dominates.
         candidates = [
             { mix: { tfsa: 1, nonreg: 0, rrsp: 0 } },
             { mix: { tfsa: 0, nonreg: 1, rrsp: 0 } },

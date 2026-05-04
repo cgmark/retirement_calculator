@@ -38,6 +38,7 @@ export async function runDeterministicProjection(params) {
     let isDepleted = false;
     const constructedMixByAge = {};
 
+    // Baseline projection is deterministic: fixed growth/inflation by year index.
     for (let i = 0; age + i <= lifeExpectancy; i++) {
         const currentAge = age + i;
         const inflationFactor = Math.pow(1 + inflation, i);
@@ -86,6 +87,7 @@ export async function runDeterministicProjection(params) {
 
         netNeeded = Math.max(0, targetSpending - netGovIncome);
 
+        // Draw helper mutates account balances and tax state in-place for this year.
         const executeDraw = (accountType, targetNet) => {
             if (targetNet <= 0 || netNeeded <= 0) return;
             const amountToDraw = Math.min(targetNet, netNeeded);
@@ -192,6 +194,8 @@ export async function runDeterministicProjection(params) {
         }
 
         if (grossOAS > 0) {
+            // Clawback can require extra withdrawals, which in turn can raise clawback.
+            // Iterate until incremental clawback is negligible.
             const oasThreshold = 90997 * inflationFactor;
             let prevClawback = 0;
 

@@ -11,8 +11,12 @@ export async function solveSustainableSpending(params) {
         shouldCancel
     } = params;
 
+    // Two-phase search:
+    // 1) Bracket a failure point by expanding high spend.
+    // 2) Binary-search highest spend meeting target success.
     let low = 0;
     let high = Math.max(10000, baselineSpend || 60000);
+    // Use a smaller trial count while solving to keep UI latency acceptable.
     const testTrials = Math.max(150, Math.min(400, Math.round((monteCarloParams.trials || 500) * 0.5)));
 
     for (let expand = 0; expand < 8; expand++) {

@@ -49,6 +49,7 @@ export async function runRetirementCalculation(params) {
     let solvedSpendOutput = null;
     let shouldPromptEnableMcForSolve = false;
 
+    // Optional pre-pass: solve for a flat spend that meets target MC success rate.
     if (spendingMode === "solve") {
         if (!enableMonteCarlo) {
             shouldPromptEnableMcForSolve = true;
@@ -99,6 +100,7 @@ export async function runRetirementCalculation(params) {
     const effectiveStrategy = selectedStrategyMode;
     const showAdvancedProgress = selectedStrategyMode === "outcome-based" && runMonteCarloNow;
 
+    // Deterministic baseline path is always computed (also used for charts/tables).
     const { results, constructedMixByAge } = await runDeterministicProjection({
         age,
         rrspStart: rrsp,
@@ -128,6 +130,7 @@ export async function runRetirementCalculation(params) {
     let monteCarloMeta = null;
 
     if (enableMonteCarlo && runMonteCarloNow) {
+        // Full MC run uses the deterministic pass policy/mix as its strategy input.
         if (typeof onMonteCarloStart === "function") onMonteCarloStart(mcTrials);
         monteCarloResults = await runMonteCarlo({
             age,

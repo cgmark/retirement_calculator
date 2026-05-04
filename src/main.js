@@ -7,6 +7,7 @@ import { readScenarioInputs } from "./core/inputs.js";
 import { runRetirementCalculation } from "./core/calculateRetirement.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+    // UI-level state: keep long-running calc/MC interactions responsive and cancellable.
     let balanceChartInst = null;
     let incomeChartInst = null;
     let mcOutcomeChartInst = null;
@@ -37,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function saveInputs() {
         try {
+            // Persist every control so refresh/revisit restores the last scenario quickly.
             inputIds.forEach(id => { 
                 const el = document.getElementById(id);
                 if(el) {
@@ -113,6 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!Array.isArray(rows) || rows.length === 0) {
+            // First run/default fallback: seed schedule from current headline inputs.
             const currentAge = parseInt(document.getElementById('age').value) || 60;
             const lifeExpectancy = parseInt(document.getElementById('lifeExpectancy').value) || 100;
             const spend = parseFloat(document.getElementById('spending').value) || 60000;
@@ -129,6 +132,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function getValidatedSpendingSchedule() {
+        // This is the UI-facing wrapper around core schedule normalization/validation.
+        // It translates validation outcomes into user-readable status text.
         const statusEl = document.getElementById('spendingScheduleStatus');
         const currentAge = parseInt(document.getElementById('age').value) || 60;
         const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
@@ -352,6 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function calculateRetirement(runMonteCarloNow = true) {
+        // Coalesce rapid UI changes: if a run is in-flight, queue only one rerun flag.
         if (isRecalculating) {
             queuedRecalc = runMonteCarloNow || queuedRecalc === true;
             return;
@@ -365,6 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const inputs = readScenarioInputs(document, getValidatedSpendingSchedule);
             if (inputs.currentAcb > inputs.nonreg) {
+                // Mirror the ACB clamp back into the input so UI and model stay consistent.
                 const acbEl = document.getElementById('nonregAcb');
                 if (acbEl) acbEl.value = String(inputs.nonreg);
             }
@@ -428,6 +435,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
                     }
                     renderMonteCarloOutcomeChart({
+                        // Render partial MC snapshots so users can see convergence in real time.
                         trials: done,
                         requestedTrials: total,
                         cancelled: false,
@@ -518,6 +526,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function recalculateForUiChange() {
+        // Debounce change-driven reruns to avoid recomputing on every keystroke burst.
         if (recalcTimer) clearTimeout(recalcTimer);
         const enabled = document.getElementById('enableMonteCarlo').checked;
         const runStatusEl = document.getElementById('runStatus');
@@ -545,6 +554,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateOutcomeSettingsVisibility() {
+        // Advanced mode hides simple strategy selector because policy is optimizer-driven.
         const mode = document.getElementById('strategyMode')?.value;
         const enabled = mode === 'advanced';
         const box = document.getElementById('outcomeSettings');
@@ -586,6 +596,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function setupCollapsibleSections() {
+        // Purely UX: remember collapsed/open cards between sessions.
         let saved = {};
         try {
             saved = JSON.parse(localStorage.getItem('retirePlanner_sectionState') || '{}');
@@ -707,6 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy, effectiveStrategy) {
+        // Presentation layer only: charts, table, summary cards, and explanatory copy.
         const displayInflated = document.getElementById('displayMode').checked;
         const inflation = parseFloat(document.getElementById('inflation').value) / 100;
         

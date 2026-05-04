@@ -1,4 +1,5 @@
 export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
+    // Keep all DOM parsing/clamping in one place so core modules stay UI-agnostic.
     const age = parseInt(doc.getElementById("age").value);
     const rrsp = parseFloat(doc.getElementById("rrsp").value);
     const tfsa = parseFloat(doc.getElementById("tfsa").value);
@@ -29,6 +30,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     const enforceRrifMin = doc.getElementById("enforceRrifMin").value === "yes";
     const strategy = doc.getElementById("strategy").value;
     const strategyMode = doc.getElementById("strategyMode").value;
+    // Advanced mode always routes to outcome-based strategy construction.
     const selectedStrategyMode = strategyMode === "advanced" ? "outcome-based" : strategy;
     const enableMonteCarlo = doc.getElementById("enableMonteCarlo").checked;
     const mcTrials = Math.max(100, Math.min(10000, parseInt(doc.getElementById("mcTrials").value) || 1000));

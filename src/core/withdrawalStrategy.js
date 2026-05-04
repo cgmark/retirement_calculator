@@ -8,9 +8,10 @@ const STRATEGY_SEQUENCES = {
 };
 
 export function applySequenceDraw({ strategy, targetNet, getNetNeeded, executeDraw }) {
-    const sequence = STRATEGY_SEQUENCES[strategy];
-    if (!sequence || targetNet <= 0 || getNetNeeded() <= 0) return;
-    sequence.forEach((accountType) => executeDraw(accountType, targetNet));
+  const sequence = STRATEGY_SEQUENCES[strategy];
+  if (!sequence || targetNet <= 0 || getNetNeeded() <= 0) return;
+  // Each executeDraw call is capped by current net-needed; later calls may be no-ops.
+  sequence.forEach((accountType) => executeDraw(accountType, targetNet));
 }
 
 export function applyProportionalDraw({ getBalances, getNetNeeded, executeDraw, iterations = 10 }) {
@@ -41,7 +42,8 @@ export function applyWeightedMixDraw({ getBalances, getNetNeeded, executeDraw, m
         executeDraw("rrsp", need * (active.rrsp / den));
     }
 
-    if (allowFallback && getNetNeeded() > 0.01) {
-        ["tfsa", "nonreg", "rrsp"].forEach((accountType) => executeDraw(accountType, getNetNeeded()));
-    }
+  if (allowFallback && getNetNeeded() > 0.01) {
+    // Fallback sweep prevents tiny residual shortfalls due to tax feedback and rounding.
+    ["tfsa", "nonreg", "rrsp"].forEach((accountType) => executeDraw(accountType, getNetNeeded()));
+  }
 }

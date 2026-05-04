@@ -23,6 +23,7 @@ export function calculateTax(income, provCode, inflFactor) {
     { limit: Infinity, rate: 0.33 }
   ];
 
+  // Compute progressive federal tax, then apply BPA credit at the lowest fed rate.
   let fedTax = 0;
   let prevLimit = 0;
   for (const b of fedBrackets) {
@@ -32,6 +33,7 @@ export function calculateTax(income, provCode, inflFactor) {
   fedTax -= fedBPA * 0.15;
   if (fedTax < 0) fedTax = 0;
 
+  // Province tax uses province-specific brackets and BPA/credit rate.
   const pData = provData[provCode];
   const provBPA = pData.bpa * inflFactor;
   let provTax = 0;
@@ -71,6 +73,7 @@ export function findGrossDraw(neededNet, maxGrossAvailable, currentTaxableInc, i
     return { gross: maxGrossAvailable, net: maxNet, tax: maxTax, taxableAdd: maxTaxableAdd };
   }
 
+  // Binary-search gross draw so post-tax net is as close as possible to neededNet.
   for (let i = 0; i < 30; i++) {
     const mid = (low + high) / 2;
     const taxAdd = mid * incRate;

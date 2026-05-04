@@ -24,6 +24,7 @@ export async function runMonteCarlo(params) {
         rrifStartAge, enforceRrifMin, strategy, projectionAge, trials, volatility, inflationVolatility, seed, onProgress, shouldCancel, constructedMixByAge
     } = params;
 
+    // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
     const rng = Number.isFinite(seed) ? createSeededRng(seed) : Math.random;
     let successCount = 0;
     let totalTax = 0;
@@ -59,6 +60,7 @@ export async function runMonteCarlo(params) {
 
         for (let i = 0; age + i <= projectionAge; i++) {
             const currentAge = age + i;
+            // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
             const inflationFactor = mcInflationFactor;
             const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, spendingSchedule);
             const targetSpending = ageBaseSpending * inflationFactor;
@@ -120,6 +122,7 @@ export async function runMonteCarlo(params) {
                 }
             };
 
+            // Estimate zero-tax room for a low-friction RRSP draw before strategy withdrawals.
             let low = 0, high = 50000 * inflationFactor;
             for (let j = 0; j < 20; j++) {
                 const mid = (low + high) / 2;
@@ -191,7 +194,8 @@ export async function runMonteCarlo(params) {
                 break;
             }
 
-            const sampledGrowth = growth + (volatility * randomNormal(rng));
+                // Shock returns/inflation independently each year for this path.
+                const sampledGrowth = growth + (volatility * randomNormal(rng));
             const yearlyGrowth = Math.max(-0.95, sampledGrowth);
             const sampledInflation = inflation + (inflationVolatility * randomNormal(rng));
             const yearlyInflation = Math.max(-0.03, Math.min(0.20, sampledInflation));

@@ -5,8 +5,9 @@ export function getBaseSpendingForAge(currentAge, defaultSpending, schedule) {
 }
 
 export function sanitizeScheduleRows(rows, defaults = { startAge: 60, endAge: 100, amount: 60000 }) {
-    if (!Array.isArray(rows)) return [];
-    return rows.map((r) => ({
+  if (!Array.isArray(rows)) return [];
+  // Coerce partially-invalid persisted rows into usable defaults.
+  return rows.map((r) => ({
         startAge: Number.isFinite(r?.startAge) ? r.startAge : defaults.startAge,
         endAge: Number.isFinite(r?.endAge) ? r.endAge : defaults.endAge,
         amount: Number.isFinite(r?.amount) ? r.amount : defaults.amount
@@ -14,7 +15,7 @@ export function sanitizeScheduleRows(rows, defaults = { startAge: 60, endAge: 10
 }
 
 export function normalizeScheduleRows(rawRows, currentAge, lifeExpectancy) {
-    let wasClamped = false;
+  let wasClamped = false;
     const cleaned = (Array.isArray(rawRows) ? rawRows : [])
         .filter((r) => Number.isFinite(r.startAge) && Number.isFinite(r.endAge) && Number.isFinite(r.amount))
         .map((r) => {
@@ -26,7 +27,8 @@ export function normalizeScheduleRows(rawRows, currentAge, lifeExpectancy) {
             next.endAge = clampedEnd;
             return next;
         })
-        .sort((a, b) => a.startAge - b.startAge);
+      // Sort once here so overlap checks can stay simple and deterministic.
+      .sort((a, b) => a.startAge - b.startAge);
     return { cleaned, wasClamped };
 }
 
