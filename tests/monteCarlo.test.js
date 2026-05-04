@@ -24,7 +24,7 @@ function baseParams(overrides = {}) {
     volatility: 0.12,
     inflationVolatility: 0.01,
     seed: 123,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -50,7 +50,11 @@ describe("runMonteCarlo", () => {
     expect(res.assetP10.length).toBe(res.ageLabels.length);
     expect(res.assetP50.length).toBe(res.ageLabels.length);
     expect(res.assetP90.length).toBe(res.ageLabels.length);
-    expect(res.bucketLabels.every((label) => Number.isFinite(res.bucketCounts[label]))).toBe(true);
+    expect(
+      res.bucketLabels.every((label) =>
+        Number.isFinite(res.bucketCounts[label]),
+      ),
+    ).toBe(true);
   });
 
   it("supports cancellation with partial results", async () => {

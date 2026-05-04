@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyProportionalDraw, applyWeightedMixDraw, applySequenceDraw } from "../src/core/withdrawalStrategy.js";
+import {
+  applyProportionalDraw,
+  applyWeightedMixDraw,
+  applySequenceDraw,
+} from "../src/core/withdrawalStrategy.js";
 
 describe("withdrawal strategy helpers", () => {
   it("applies sequence draw in configured order", () => {
@@ -14,7 +18,7 @@ describe("withdrawal strategy helpers", () => {
       strategy: "tfsa-rrsp-nonreg",
       targetNet: 100,
       getNetNeeded: () => netNeeded,
-      executeDraw
+      executeDraw,
     });
 
     expect(calls.map((c) => c[0])).toEqual(["tfsa", "rrsp", "nonreg"]);
@@ -32,7 +36,7 @@ describe("withdrawal strategy helpers", () => {
       getBalances: () => ({ rrsp: 30, tfsa: 20, nonreg: 10 }),
       getNetNeeded: () => netNeeded,
       executeDraw,
-      iterations: 1
+      iterations: 1,
     });
 
     expect(calls.length).toBe(3);
@@ -55,7 +59,7 @@ describe("withdrawal strategy helpers", () => {
       executeDraw,
       mix: { tfsa: 0.5, nonreg: 0.3, rrsp: 0.2 },
       iterations: 1,
-      allowFallback: true
+      allowFallback: true,
     });
 
     expect(calls[0][0]).toBe("tfsa");

@@ -22,7 +22,7 @@ function collectDeps(node, acc) {
 const raw = execFileSync("npm", ["ls", "--omit=dev", "--all", "--json"], {
   cwd: root,
   encoding: "utf8",
-  stdio: ["ignore", "pipe", "pipe"]
+  stdio: ["ignore", "pipe", "pipe"],
 });
 
 const tree = JSON.parse(raw);
@@ -33,15 +33,26 @@ const lines = [];
 lines.push("Third-Party Licenses");
 lines.push("Generated from production dependencies\n");
 
-const rows = Array.from(deps.values()).sort((a, b) => a.name.localeCompare(b.name));
+const rows = Array.from(deps.values()).sort((a, b) =>
+  a.name.localeCompare(b.name),
+);
 for (const dep of rows) {
   const pkgPath = resolve(root, "node_modules", dep.name, "package.json");
   let license = "UNKNOWN";
   let homepage = "";
   try {
     const pkg = parseJson(pkgPath);
-    license = pkg.license || (Array.isArray(pkg.licenses) ? pkg.licenses.map(l => l.type).join(", ") : "UNKNOWN");
-    homepage = pkg.homepage || (typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url) || "";
+    license =
+      pkg.license ||
+      (Array.isArray(pkg.licenses)
+        ? pkg.licenses.map((l) => l.type).join(", ")
+        : "UNKNOWN");
+    homepage =
+      pkg.homepage ||
+      (typeof pkg.repository === "string"
+        ? pkg.repository
+        : pkg.repository?.url) ||
+      "";
   } catch {
     // keep fallback values
   }

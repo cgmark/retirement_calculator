@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createSeededRng, percentile, randomNormal } from "../src/core/random.js";
+import {
+  createSeededRng,
+  percentile,
+  randomNormal,
+} from "../src/core/random.js";
 
 describe("random helpers", () => {
   it("seeded rng is deterministic", () => {

@@ -10,7 +10,7 @@ describe("solveSustainableSpending", () => {
     const runMonteCarlo = async ({ baseSpending }) => {
       calls.push(baseSpending);
       return {
-        successRate: baseSpending <= threshold ? 0.92 : 0.70
+        successRate: baseSpending <= threshold ? 0.92 : 0.7,
       };
     };
 
@@ -21,7 +21,7 @@ describe("solveSustainableSpending", () => {
       baselineSpend: 60000,
       monteCarloParams: { trials: 600 },
       runMonteCarlo,
-      formatCurrency: (n) => `$${Math.round(n)}`
+      formatCurrency: (n) => `$${Math.round(n)}`,
     });
 
     expect(solved).toBeTypeOf("number");
@@ -41,7 +41,7 @@ describe("solveSustainableSpending", () => {
       monteCarloParams: { trials: 500 },
       runMonteCarlo,
       formatCurrency: (n) => `$${Math.round(n)}`,
-      shouldCancel: () => true
+      shouldCancel: () => true,
     });
 
     expect(solved).toBeNull();
@@ -69,7 +69,7 @@ describe("solveSustainableSpending", () => {
       trials: 220,
       volatility: 0.12,
       inflationVolatility: 0.01,
-      seed: 12345
+      seed: 12345,
     };
 
     const targetSuccessRate = 0.8;
@@ -81,14 +81,20 @@ describe("solveSustainableSpending", () => {
       baselineSpend: 60000,
       monteCarloParams,
       runMonteCarlo,
-      formatCurrency: (n) => `$${Math.round(n)}`
+      formatCurrency: (n) => `$${Math.round(n)}`,
     });
 
     expect(solved).not.toBeNull();
-    const atSolved = await runMonteCarlo({ ...monteCarloParams, baseSpending: solved });
+    const atSolved = await runMonteCarlo({
+      ...monteCarloParams,
+      baseSpending: solved,
+    });
     expect(atSolved.successRate).toBeGreaterThanOrEqual(targetSuccessRate);
 
-    const aboveSolved = await runMonteCarlo({ ...monteCarloParams, baseSpending: solved + precision });
+    const aboveSolved = await runMonteCarlo({
+      ...monteCarloParams,
+      baseSpending: solved + precision,
+    });
     expect(aboveSolved.successRate).toBeLessThanOrEqual(atSolved.successRate);
   });
 });

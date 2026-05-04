@@ -15,7 +15,7 @@ const mime = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
-  ".ico": "image/x-icon"
+  ".ico": "image/x-icon",
 };
 
 function safePath(urlPath) {
@@ -43,7 +43,9 @@ const server = createServer(async (req, res) => {
     }
 
     const body = await readFile(path);
-    res.writeHead(200, { "Content-Type": mime[extname(path)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": mime[extname(path)] || "application/octet-stream",
+    });
     res.end(body);
   } catch {
     res.writeHead(404);

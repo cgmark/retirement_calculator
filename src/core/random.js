@@ -22,6 +22,9 @@ export function percentile(values, p) {
   if (!values.length) return 0;
   // Nearest-rank style index keeps outputs stable across reruns/tests.
   const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.max(0, Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))));
+  const idx = Math.max(
+    0,
+    Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))),
+  );
   return sorted[idx];
 }

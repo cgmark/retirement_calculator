@@ -2,7 +2,7 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**"]
+    ignores: ["dist/**", "node_modules/**"],
   },
   {
     files: ["src/**/*.js", "tests/**/*.js", "scripts/**/*.mjs"],
@@ -11,12 +11,12 @@ export default [
       sourceType: "module",
       globals: {
         ...globals.browser,
-        ...globals.node
-      }
+        ...globals.node,
+      },
     },
     rules: {
       "no-undef": "error",
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }]
-    }
-  }
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
 ];

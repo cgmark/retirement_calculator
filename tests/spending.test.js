@@ -5,7 +5,7 @@ import {
   normalizeScheduleRows,
   getScheduleValidationError,
   buildFlatSchedule,
-  isFlatSchedule
+  isFlatSchedule,
 } from "../src/core/spending.js";
 
 describe("getBaseSpendingForAge", () => {
@@ -17,7 +17,7 @@ describe("getBaseSpendingForAge", () => {
   it("returns matching schedule amount for in-range age", () => {
     const schedule = [
       { startAge: 60, endAge: 69, amount: 70000 },
-      { startAge: 70, endAge: 80, amount: 50000 }
+      { startAge: 70, endAge: 80, amount: 50000 },
     ];
     expect(getBaseSpendingForAge(75, 60000, schedule)).toBe(50000);
   });
@@ -36,7 +36,9 @@ describe("getBaseSpendingForAge", () => {
 
 describe("schedule helpers", () => {
   it("sanitizes missing row values with defaults", () => {
-    const rows = sanitizeScheduleRows([{ startAge: 62, endAge: undefined, amount: NaN }]);
+    const rows = sanitizeScheduleRows([
+      { startAge: 62, endAge: undefined, amount: NaN },
+    ]);
     expect(rows).toEqual([{ startAge: 62, endAge: 100, amount: 60000 }]);
   });
 
@@ -48,20 +50,29 @@ describe("schedule helpers", () => {
   });
 
   it("reports overlap and invalid range", () => {
-    expect(getScheduleValidationError([
-      { startAge: 70, endAge: 65, amount: 50000 }
-    ])).toBe("invalid-range");
+    expect(
+      getScheduleValidationError([{ startAge: 70, endAge: 65, amount: 50000 }]),
+    ).toBe("invalid-range");
 
-    expect(getScheduleValidationError([
-      { startAge: 60, endAge: 70, amount: 50000 },
-      { startAge: 70, endAge: 80, amount: 50000 }
-    ])).toBe("overlap");
+    expect(
+      getScheduleValidationError([
+        { startAge: 60, endAge: 70, amount: 50000 },
+        { startAge: 70, endAge: 80, amount: 50000 },
+      ]),
+    ).toBe("overlap");
   });
 
   it("builds and recognizes flat schedule", () => {
     const flat = buildFlatSchedule(60, 95, 60123.2);
     expect(flat).toEqual([{ startAge: 60, endAge: 95, amount: 60123 }]);
     expect(isFlatSchedule(flat, 60, 95, 60123.2)).toBe(true);
-    expect(isFlatSchedule([{ startAge: 61, endAge: 95, amount: 60123 }], 60, 95, 60123)).toBe(false);
+    expect(
+      isFlatSchedule(
+        [{ startAge: 61, endAge: 95, amount: 60123 }],
+        60,
+        95,
+        60123,
+      ),
+    ).toBe(false);
   });
 });
