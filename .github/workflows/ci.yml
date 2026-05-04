@@ -24,6 +24,12 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Run lint
+        run: npm run lint
+
+      - name: Verify single-file build
+        run: npm run build:single
+
   licenses:
     runs-on: ubuntu-latest
     steps:

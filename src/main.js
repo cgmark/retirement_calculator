@@ -1,5 +1,6 @@
 import Chart from "chart.js/auto";
-import { calculateTax } from "./core/tax.js";
+import { calculateTax, findGrossDraw } from "./core/tax.js";
+import { getRrifMinimumRate } from "./core/rrif.js";
 import { runMonteCarlo } from "./core/monteCarlo.js";
 import { getBaseSpendingForAge } from "./core/spending.js";
 
