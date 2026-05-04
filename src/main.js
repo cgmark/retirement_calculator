@@ -2,6 +2,7 @@ import Chart from "chart.js/auto";
 import { runMonteCarlo } from "./core/monteCarlo.js";
 import { sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule, isFlatSchedule } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
+import { solveSustainableSpending } from "./core/solveSpending.js";
 
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
@@ -171,48 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
         statusEl.style.color = '#166534';
         statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? '' : 's'} through age ${lifeExpectancy}.`;
         return cleaned;
-    }
-
-    async function solveSustainableSpending(params) {
-        const {
-            targetSuccessRate,
-            precision,
-            maxIterations,
-            baselineSpend,
-            monteCarloParams,
-            onIteration,
-            shouldCancel
-        } = params;
-
-        let low = 0;
-        let high = Math.max(10000, baselineSpend || 60000);
-        const testTrials = Math.max(150, Math.min(400, Math.round((monteCarloParams.trials || 500) * 0.5)));
-
-        for (let expand = 0; expand < 8; expand++) {
-            const res = await runMonteCarlo({ ...monteCarloParams, trials: testTrials, baseSpending: high });
-            if (typeof onIteration === 'function') onIteration(`Bracketing at ${formatCurrency(high)} (${(res.successRate * 100).toFixed(1)}%)`);
-            if (typeof shouldCancel === 'function' && shouldCancel()) return null;
-            if (res.successRate < targetSuccessRate) break;
-            high *= 1.5;
-        }
-
-        let best = low;
-        for (let i = 0; i < maxIterations; i++) {
-            if (typeof shouldCancel === 'function' && shouldCancel()) return null;
-            const mid = (low + high) / 2;
-            const res = await runMonteCarlo({ ...monteCarloParams, trials: testTrials, baseSpending: mid });
-            if (typeof onIteration === 'function') onIteration(`Solve iter ${i + 1}/${maxIterations}: ${formatCurrency(mid)} -> ${(res.successRate * 100).toFixed(1)}%`);
-
-            if (res.successRate >= targetSuccessRate) {
-                best = mid;
-                low = mid;
-            } else {
-                high = mid;
-            }
-            if ((high - low) <= precision) break;
-        }
-
-        return best;
     }
 
     function renderMonteCarloOutcomeChart(monteCarloResults) {
@@ -481,6 +440,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         seed: mcSeed,
                         shouldCancel: () => mcCancelRequested
                     },
+                    runMonteCarlo,
+                    formatCurrency,
                     onIteration: (msg) => { if (runStatusEl) runStatusEl.innerText = msg; },
                     shouldCancel: () => mcCancelRequested
                 });
