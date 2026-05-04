@@ -2,7 +2,7 @@ import Chart from "chart.js/auto";
 import { calculateTax, findGrossDraw } from "./core/tax.js";
 import { getRrifMinimumRate } from "./core/rrif.js";
 import { runMonteCarlo } from "./core/monteCarlo.js";
-import { getBaseSpendingForAge } from "./core/spending.js";
+import { getBaseSpendingForAge, sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule, isFlatSchedule } from "./core/spending.js";
 
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
@@ -118,10 +118,10 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        rows.forEach(r => {
-            const startAge = Number.isFinite(r.startAge) ? r.startAge : 60;
-            const endAge = Number.isFinite(r.endAge) ? r.endAge : 100;
-            const amount = Number.isFinite(r.amount) ? r.amount : 60000;
+        sanitizeScheduleRows(rows).forEach(r => {
+            const startAge = r.startAge;
+            const endAge = r.endAge;
+            const amount = r.amount;
             container.appendChild(createSpendingScheduleRow(startAge, endAge, amount));
         });
     }
@@ -136,37 +136,23 @@ document.addEventListener("DOMContentLoaded", () => {
             amount: parseFloat(row.querySelector('.sched-amount').value)
         }));
 
-        let wasClamped = false;
-        const cleaned = rawRows
-            .filter(r => Number.isFinite(r.startAge) && Number.isFinite(r.endAge) && Number.isFinite(r.amount))
-            .map(r => {
-                const next = { ...r };
-                const clampedStart = Math.max(currentAge, Math.min(lifeExpectancy, next.startAge));
-                const clampedEnd = Math.max(currentAge, Math.min(lifeExpectancy, next.endAge));
-                if (clampedStart !== next.startAge || clampedEnd !== next.endAge) wasClamped = true;
-                next.startAge = clampedStart;
-                next.endAge = clampedEnd;
-                return next;
-            });
+        const { cleaned, wasClamped } = normalizeScheduleRows(rawRows, currentAge, lifeExpectancy);
         if (cleaned.length === 0) {
             statusEl.style.color = '#b91c1c';
             statusEl.innerText = 'No valid schedule rows found. Using default Desired Net Spend/Yr.';
             return [];
         }
 
-        cleaned.sort((a, b) => a.startAge - b.startAge);
-
-        for (let i = 0; i < cleaned.length; i++) {
-            if (cleaned[i].startAge > cleaned[i].endAge) {
-                statusEl.style.color = '#b91c1c';
-                statusEl.innerText = 'Each row needs Start Age <= End Age. Using default Desired Net Spend/Yr.';
-                return [];
-            }
-            if (i > 0 && cleaned[i].startAge <= cleaned[i - 1].endAge) {
-                statusEl.style.color = '#b91c1c';
-                statusEl.innerText = 'Spending schedule rows overlap. Using default Desired Net Spend/Yr.';
-                return [];
-            }
+        const validationError = getScheduleValidationError(cleaned);
+        if (validationError === 'invalid-range') {
+            statusEl.style.color = '#b91c1c';
+            statusEl.innerText = 'Each row needs Start Age <= End Age. Using default Desired Net Spend/Yr.';
+            return [];
+        }
+        if (validationError === 'overlap') {
+            statusEl.style.color = '#b91c1c';
+            statusEl.innerText = 'Spending schedule rows overlap. Using default Desired Net Spend/Yr.';
+            return [];
         }
 
         if (wasClamped) {
@@ -1290,26 +1276,22 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentAge = parseInt(document.getElementById('age').value) || 60;
         const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
         const spend = Number.isFinite(spendOverride) ? spendOverride : (parseFloat(document.getElementById('spending').value) || 0);
+        const flatRows = buildFlatSchedule(currentAge, lifeExpectancy, spend);
         container.innerHTML = '';
-        container.appendChild(createSpendingScheduleRow(currentAge, lifeExpectancy, Math.round(spend)));
+        flatRows.forEach((row) => container.appendChild(createSpendingScheduleRow(row.startAge, row.endAge, row.amount)));
         saveSpendingSchedule();
     }
 
     function scheduleDiffersFromFlatCurrentSpend(spendOverride = null) {
-        const rows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row'));
+        const rows = Array.from(document.querySelectorAll('#spendingScheduleRows .spending-row')).map((row) => ({
+            startAge: parseInt(row.querySelector('.sched-start').value),
+            endAge: parseInt(row.querySelector('.sched-end').value),
+            amount: parseFloat(row.querySelector('.sched-amount').value)
+        }));
         const currentAge = parseInt(document.getElementById('age').value) || 60;
         const lifeExpectancy = Math.max(currentAge, Math.min(120, parseInt(document.getElementById('lifeExpectancy').value) || 100));
         const spend = Math.round(Number.isFinite(spendOverride) ? spendOverride : (parseFloat(document.getElementById('spending').value) || 0));
-
-        if (rows.length !== 1) return true;
-
-        const row = rows[0];
-        const start = parseInt(row.querySelector('.sched-start').value);
-        const end = parseInt(row.querySelector('.sched-end').value);
-        const amount = Math.round(parseFloat(row.querySelector('.sched-amount').value) || 0);
-
-        if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(amount)) return true;
-        return !(start === currentAge && end === lifeExpectancy && amount === spend);
+        return !isFlatSchedule(rows, currentAge, lifeExpectancy, spend);
     }
 
     function updateUI(results, monteCarloResults, monteCarloEnabled, monteCarloStale, monteCarloMeta, solvedSpendOutput, targetSuccessRate, spendingMode, selectedStrategy, effectiveStrategy) {
