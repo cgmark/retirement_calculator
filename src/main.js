@@ -3,6 +3,7 @@ import { calculateTax, findGrossDraw } from "./core/tax.js";
 import { getRrifMinimumRate } from "./core/rrif.js";
 import { runMonteCarlo } from "./core/monteCarlo.js";
 import { getBaseSpendingForAge, sanitizeScheduleRows, normalizeScheduleRows, getScheduleValidationError, buildFlatSchedule, isFlatSchedule } from "./core/spending.js";
+import { applyProportionalDraw, applyWeightedMixDraw, applySequenceDraw } from "./core/withdrawalStrategy.js";
 
 document.addEventListener("DOMContentLoaded", () => {
     let balanceChartInst = null;
@@ -612,19 +613,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (targetNet <= 0 || netNeeded <= 0) return;
 
                 if (effectiveStrategy === 'proportional') {
-                    for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
-                        let tot = rrsp + tfsa + nonreg;
-                        if (tot <= 0) break;
-
-                        let pRRSP = rrsp / tot;
-                        let pTFSA = tfsa / tot;
-                        let pNonReg = nonreg / tot;
-                        let needNetToSplit = netNeeded;
-
-                        executeDraw('tfsa', needNetToSplit * pTFSA);
-                        executeDraw('nonreg', needNetToSplit * pNonReg);
-                        executeDraw('rrsp', needNetToSplit * pRRSP);
-                    }
+                    applyProportionalDraw({
+                        getBalances: () => ({ rrsp, tfsa, nonreg }),
+                        getNetNeeded: () => netNeeded,
+                        executeDraw
+                    });
                 } else if (effectiveStrategy === 'outcome-based') {
                     const weights = getNormalizedOutcomeWeights();
                     const probeNeed = Math.max(250, netNeeded);
@@ -870,46 +863,21 @@ document.addEventListener("DOMContentLoaded", () => {
                     } : { tfsa: 1/3, nonreg: 1/3, rrsp: 1/3 };
                     constructedMixByAge[currentAge] = normalizedMix;
 
-                    for (let k = 0; k < 20 && netNeeded > 0.01; k++) {
-                        const active = {
-                            tfsa: tfsa > 0 ? normalizedMix.tfsa : 0,
-                            nonreg: nonreg > 0 ? normalizedMix.nonreg : 0,
-                            rrsp: rrsp > 0 ? normalizedMix.rrsp : 0
-                        };
-                        const den = active.tfsa + active.nonreg + active.rrsp;
-                        if (den <= 0) break;
-                        executeDraw('tfsa', netNeeded * (active.tfsa / den));
-                        executeDraw('nonreg', netNeeded * (active.nonreg / den));
-                        executeDraw('rrsp', netNeeded * (active.rrsp / den));
-                    }
-                    if (netNeeded > 0.01) {
-                        ['tfsa', 'nonreg', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
-                    }
+                    applyWeightedMixDraw({
+                        getBalances: () => ({ rrsp, tfsa, nonreg }),
+                        getNetNeeded: () => netNeeded,
+                        executeDraw,
+                        mix: normalizedMix
+                    });
                 } else {
-                const sequences = {
-                    'tfsa-rrsp-nonreg': ['tfsa', 'rrsp', 'nonreg'],
-                    'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
-                    'rrsp-tfsa-nonreg': ['rrsp', 'tfsa', 'nonreg'],
-                    'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
-                    'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
-                    'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
-                };
-                    sequences[effectiveStrategy].forEach(acc => executeDraw(acc, targetNet));
+                    applySequenceDraw({ strategy: effectiveStrategy, targetNet, getNetNeeded: () => netNeeded, executeDraw });
                 }
             };
 
             executeByStrategy(netNeeded);
 
             if (effectiveStrategy !== 'proportional' && effectiveStrategy !== 'outcome-based' && netNeeded > 0.01) {
-                const sequences = {
-                    'tfsa-rrsp-nonreg': ['tfsa', 'rrsp', 'nonreg'],
-                    'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
-                    'rrsp-tfsa-nonreg': ['rrsp', 'tfsa', 'nonreg'],
-                    'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
-                    'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
-                    'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
-                };
-                sequences[effectiveStrategy].forEach(acc => executeDraw(acc, netNeeded));
+                applySequenceDraw({ strategy: effectiveStrategy, targetNet: netNeeded, getNetNeeded: () => netNeeded, executeDraw });
             }
 
             if (grossOAS > 0) {

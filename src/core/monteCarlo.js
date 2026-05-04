@@ -2,6 +2,7 @@ import { calculateTax, findGrossDraw } from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomNormal, percentile } from "./random.js";
 import { getBaseSpendingForAge } from "./spending.js";
+import { applyProportionalDraw, applyWeightedMixDraw, applySequenceDraw } from "./withdrawalStrategy.js";
 
 function getDepletionBucket(age) {
     if (age < 65) return 'Before 65';
@@ -135,41 +136,24 @@ export async function runMonteCarlo(params) {
 
             const executeByStrategy = () => {
                 if (strategy === 'proportional') {
-                    for (let k = 0; k < 10 && netNeeded > 0.01; k++) {
-                        const tot = rrsp + tfsa + nonreg;
-                        if (tot <= 0) break;
-                        executeDraw('tfsa', netNeeded * (tfsa / tot));
-                        executeDraw('nonreg', netNeeded * (nonreg / tot));
-                        executeDraw('rrsp', netNeeded * (rrsp / tot));
-                    }
+                    applyProportionalDraw({
+                        getBalances: () => ({ rrsp, tfsa, nonreg }),
+                        getNetNeeded: () => netNeeded,
+                        executeDraw
+                    });
                 } else if (strategy === 'outcome-based') {
                     const mix = constructedMixByAge && constructedMixByAge[currentAge] ? constructedMixByAge[currentAge] : { tfsa: 1/3, nonreg: 1/3, rrsp: 1/3 };
-                    for (let k = 0; k < 20 && netNeeded > 0.01; k++) {
-                        const active = {
-                            tfsa: tfsa > 0 ? mix.tfsa : 0,
-                            nonreg: nonreg > 0 ? mix.nonreg : 0,
-                            rrsp: rrsp > 0 ? mix.rrsp : 0
-                        };
-                        const den = active.tfsa + active.nonreg + active.rrsp;
-                        if (den <= 0) break;
-                        executeDraw('tfsa', netNeeded * (active.tfsa / den));
-                        executeDraw('nonreg', netNeeded * (active.nonreg / den));
-                        executeDraw('rrsp', netNeeded * (active.rrsp / den));
-                    }
-                    if (netNeeded > 0.01) {
-                        ['tfsa', 'nonreg', 'rrsp'].forEach(acc => executeDraw(acc, netNeeded));
-                    }
+                    applyWeightedMixDraw({
+                        getBalances: () => ({ rrsp, tfsa, nonreg }),
+                        getNetNeeded: () => netNeeded,
+                        executeDraw,
+                        mix
+                    });
                 } else {
-                    const sequences = {
-                        'tfsa-rrsp-nonreg': ['tfsa', 'rrsp', 'nonreg'],
-                        'tfsa-nonreg-rrsp': ['tfsa', 'nonreg', 'rrsp'],
-                        'rrsp-tfsa-nonreg': ['rrsp', 'tfsa', 'nonreg'],
-                        'nonreg-tfsa-rrsp': ['nonreg', 'tfsa', 'rrsp'],
-                        'nonreg-rrsp-tfsa': ['nonreg', 'rrsp', 'tfsa'],
-                        'rrsp-nonreg-tfsa': ['rrsp', 'nonreg', 'tfsa']
-                    };
-                    sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
-                    if (netNeeded > 0.01) sequences[strategy].forEach(acc => executeDraw(acc, netNeeded));
+                    applySequenceDraw({ strategy, targetNet: netNeeded, getNetNeeded: () => netNeeded, executeDraw });
+                    if (netNeeded > 0.01) {
+                        applySequenceDraw({ strategy, targetNet: netNeeded, getNetNeeded: () => netNeeded, executeDraw });
+                    }
                 }
             };
 
