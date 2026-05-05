@@ -74,12 +74,14 @@ export function applyEarlyRetirementDraw({
   getNetNeeded,
   getCurrentTaxableIncome,
   getGrossOAS,
+  getMandatoryRrifDraw = () => 0,
   executeDraw,
   provCode,
   inflationFactor,
   overshootPct = 0,
   enableTfsaTransfer = false,
   onTfsaTransfer,
+  opportunisticTfsa = false,
 }) {
   if (getNetNeeded() <= 0) return;
 
@@ -109,15 +111,29 @@ export function applyEarlyRetirementDraw({
 
   if (getNetNeeded() <= 0) return;
 
-  // Prefer non-reg for remainder in early-retirement mode.
+  const oasThreshold = 90997 * inflationFactor;
+  const nearClawbackThreshold = oasThreshold * 0.95;
+  const taxableIncomeAfterRrsp = getCurrentTaxableIncome();
+  const hasOAS = getGrossOAS() > 0;
+  const aboveClawback = taxableIncomeAfterRrsp > oasThreshold;
+  const nearClawback = taxableIncomeAfterRrsp >= nearClawbackThreshold;
+  const highMandatoryRrifDraw = getMandatoryRrifDraw() > 0 && nearClawback;
+  const nonregExhausted = getBalances().nonreg <= 0.01;
+  const shouldUseTfsaFirst =
+    opportunisticTfsa &&
+    getBalances().tfsa > 0 &&
+    (nonregExhausted || (hasOAS && nearClawback) || highMandatoryRrifDraw);
+
+  if (shouldUseTfsaFirst) {
+    executeDraw("tfsa", getNetNeeded());
+  }
+
+  // Prefer non-reg for remainder in early-retirement mode unless TFSA has become advantageous.
   executeDraw("nonreg", getNetNeeded());
   if (getNetNeeded() <= 0) return;
 
   // If taxable income is above OAS threshold, favor TFSA for remaining marginal need.
-  const oasThreshold = 90997 * inflationFactor;
-  const hasOAS = getGrossOAS() > 0;
-  const aboveClawback = getCurrentTaxableIncome() > oasThreshold;
-  if (hasOAS && aboveClawback && getBalances().tfsa > 0) {
+  if ((hasOAS && aboveClawback) || shouldUseTfsaFirst) {
     executeDraw("tfsa", getNetNeeded());
   }
 

@@ -212,4 +212,65 @@ describe("withdrawal strategy helpers", () => {
 
     expect(transferred).toBeCloseTo(7700, 6);
   });
+
+  it("opportunistic TFSA keeps using nonreg when clawback pressure is absent", () => {
+    const calls = [];
+    let netNeeded = 10000;
+    let taxableIncome = 50000;
+    const balances = { rrsp: 0, tfsa: 50000, nonreg: 50000 };
+
+    const executeDraw = (acc, targetNet) => {
+      calls.push([acc, targetNet]);
+      const used = Math.min(netNeeded, targetNet);
+      if (acc === "nonreg")
+        balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
+      netNeeded = Math.max(0, netNeeded - used);
+    };
+
+    applyEarlyRetirementDraw({
+      getBalances: () => balances,
+      getNetNeeded: () => netNeeded,
+      getCurrentTaxableIncome: () => taxableIncome,
+      getGrossOAS: () => 10000,
+      getMandatoryRrifDraw: () => 0,
+      executeDraw,
+      provCode: "ON",
+      inflationFactor: 1,
+      opportunisticTfsa: true,
+    });
+
+    expect(calls[0][0]).toBe("nonreg");
+    expect(calls.some((c) => c[0] === "tfsa")).toBe(false);
+  });
+
+  it("opportunistic TFSA uses TFSA first near OAS clawback threshold", () => {
+    const calls = [];
+    let netNeeded = 10000;
+    let taxableIncome = 87000;
+    const balances = { rrsp: 0, tfsa: 50000, nonreg: 50000 };
+
+    const executeDraw = (acc, targetNet) => {
+      calls.push([acc, targetNet]);
+      const used = Math.min(netNeeded, targetNet);
+      if (acc === "nonreg")
+        balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
+      netNeeded = Math.max(0, netNeeded - used);
+    };
+
+    applyEarlyRetirementDraw({
+      getBalances: () => balances,
+      getNetNeeded: () => netNeeded,
+      getCurrentTaxableIncome: () => taxableIncome,
+      getGrossOAS: () => 10000,
+      getMandatoryRrifDraw: () => 0,
+      executeDraw,
+      provCode: "ON",
+      inflationFactor: 1,
+      opportunisticTfsa: true,
+    });
+
+    expect(calls[0][0]).toBe("tfsa");
+  });
 });
