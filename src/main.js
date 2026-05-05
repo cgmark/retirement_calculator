@@ -1256,6 +1256,17 @@ document.addEventListener("DOMContentLoaded", () => {
             },
             {
               type: "line",
+              label: "Income Tax",
+              data: results.map((r) => adj(r.incomeTax, r.yearIndex)),
+              borderColor: "#ef4444",
+              borderWidth: 2,
+              fill: false,
+              pointRadius: 0,
+              yAxisID: "y",
+              order: 0,
+            },
+            {
+              type: "line",
               label: "Effective Tax Rate",
               data: effectiveTaxRatePct,
               borderColor: "#b45309",
