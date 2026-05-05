@@ -59,6 +59,13 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     0,
     parseFloat(doc.getElementById("mcInflationVolatility").value) / 100 || 0,
   );
+  const mcBadYearSpendCutPct = Math.max(
+    0,
+    Math.min(
+      1,
+      parseFloat(doc.getElementById("mcBadYearSpendCut").value) / 100 || 0,
+    ),
+  );
   const mcSeedRaw = doc.getElementById("mcSeed").value;
   const mcSeed = mcSeedRaw === "" ? NaN : parseInt(mcSeedRaw);
 
@@ -88,6 +95,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     mcTrials,
     mcVolatility,
     mcInflationVolatility,
+    mcBadYearSpendCutPct,
     mcSeed,
   };
 }

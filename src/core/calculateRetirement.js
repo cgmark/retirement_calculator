@@ -43,6 +43,7 @@ export async function runRetirementCalculation(params) {
     mcTrials,
     mcVolatility,
     mcInflationVolatility,
+    mcBadYearSpendCutPct,
     mcSeed,
   } = inputs;
 
@@ -81,6 +82,7 @@ export async function runRetirementCalculation(params) {
           trials: mcTrials,
           volatility: mcVolatility,
           inflationVolatility: mcInflationVolatility,
+          badYearSpendCutPct: mcBadYearSpendCutPct,
           seed: mcSeed,
           shouldCancel,
         },
@@ -154,6 +156,7 @@ export async function runRetirementCalculation(params) {
       trials: mcTrials,
       volatility: mcVolatility,
       inflationVolatility: mcInflationVolatility,
+      badYearSpendCutPct: mcBadYearSpendCutPct,
       seed: mcSeed,
       constructedMixByAge:
         effectiveStrategy === "outcome-based" ? constructedMixByAge : null,
@@ -164,6 +167,7 @@ export async function runRetirementCalculation(params) {
       trials: mcTrials,
       returnVolatility: mcVolatility,
       inflationVolatility: mcInflationVolatility,
+      badYearSpendCutPct: mcBadYearSpendCutPct,
       seed: Number.isFinite(mcSeed) ? mcSeed : null,
       runAtIso: new Date().toISOString(),
       cancelled: monteCarloResults.cancelled,

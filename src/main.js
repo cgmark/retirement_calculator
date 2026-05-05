@@ -57,6 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "mcTrials",
     "mcVolatility",
     "mcInflationVolatility",
+    "mcBadYearSpendCut",
     "mcSeed",
     "wTax",
     "wOas",
@@ -452,6 +453,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function calculateRetirement(runMonteCarloNow = true) {
+    if (recalcTimer) {
+      clearTimeout(recalcTimer);
+      recalcTimer = null;
+    }
     // Coalesce rapid UI changes: if a run is in-flight, queue only one rerun flag.
     if (isRecalculating) {
       queuedRecalc = runMonteCarloNow || queuedRecalc === true;
@@ -1027,6 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
         `Last run: ${runAt}`,
         `Settings used (trials / return vol / inflation vol / seed): ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
+        `Bad-year spending cut: ${((monteCarloMeta?.badYearSpendCutPct ?? 0) * 100).toFixed(1)}%`,
         solvedLine,
         partialLine,
         staleLine,
