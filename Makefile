@@ -1,4 +1,4 @@
-.PHONY: help lint test build run licenses
+.PHONY: help lint format test build run licenses
 
 .DEFAULT_GOAL := help
 
@@ -7,6 +7,9 @@ help: ## Show available targets
 
 lint: ## Run static analysis
 	npm run lint
+
+format: ## Format code
+	npm run format
 
 test: lint ## Run unit tests
 	npm test

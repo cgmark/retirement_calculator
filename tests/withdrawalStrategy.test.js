@@ -151,7 +151,8 @@ describe("withdrawal strategy helpers", () => {
         balances.rrsp = Math.max(0, balances.rrsp - used);
         taxableIncome += used;
       }
-      if (acc === "nonreg") balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "nonreg")
+        balances.nonreg = Math.max(0, balances.nonreg - used);
       if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
       netNeeded = Math.max(0, netNeeded - used);
     };
@@ -189,7 +190,8 @@ describe("withdrawal strategy helpers", () => {
         balances.rrsp = Math.max(0, balances.rrsp - used);
         taxableIncome += used;
       }
-      if (acc === "nonreg") balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "nonreg")
+        balances.nonreg = Math.max(0, balances.nonreg - used);
       if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
       netNeeded = Math.max(0, netNeeded - used);
     };

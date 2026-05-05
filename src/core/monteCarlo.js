@@ -243,8 +243,7 @@ export async function runMonteCarlo(params) {
             provCode,
             inflationFactor,
             overshootPct,
-            enableTfsaTransfer:
-              strategy === "early-retirement-tfsa-transfer",
+            enableTfsaTransfer: strategy === "early-retirement-tfsa-transfer",
             onTfsaTransfer: (transferAmount) => {
               tfsa += transferAmount;
               netNeeded += transferAmount;
