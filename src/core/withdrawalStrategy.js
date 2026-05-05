@@ -128,7 +128,7 @@ export function applyEarlyRetirementDraw({
     executeDraw("tfsa", getNetNeeded());
   }
 
-  // Prefer non-reg for remainder in early-retirement mode unless TFSA has become advantageous.
+  // Prefer non-reg for remainder in RRSP-meltdown mode unless TFSA has become advantageous.
   executeDraw("nonreg", getNetNeeded());
   if (getNetNeeded() <= 0) return;
 

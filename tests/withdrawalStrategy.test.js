@@ -69,7 +69,7 @@ describe("withdrawal strategy helpers", () => {
     expect(calls.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("early-retirement draws rrsp then nonreg", () => {
+  it("rrsp-meltdown draws rrsp then nonreg", () => {
     const calls = [];
     let netNeeded = 5000;
     let taxableIncome = 50000;
@@ -100,7 +100,7 @@ describe("withdrawal strategy helpers", () => {
     if (calls.length > 1) expect(calls[1][0]).toBe("nonreg");
   });
 
-  it("early-retirement +20% requests more RRSP headroom than base", () => {
+  it("rrsp-meltdown +20% requests more RRSP headroom than base", () => {
     const baseCalls = [];
     const plusCalls = [];
 
@@ -138,7 +138,7 @@ describe("withdrawal strategy helpers", () => {
     expect(plusRrspTarget).toBeGreaterThan(baseRrspTarget);
   });
 
-  it("early-retirement TFSA transfer moves RRSP draw into TFSA and backfills from nonreg", () => {
+  it("rrsp-meltdown TFSA transfer moves RRSP draw into TFSA and backfills from nonreg", () => {
     let netNeeded = 12000;
     let taxableIncome = 50000;
     const balances = { rrsp: 100000, tfsa: 20000, nonreg: 100000 };
@@ -178,7 +178,7 @@ describe("withdrawal strategy helpers", () => {
     expect(balances.tfsa).toBeGreaterThan(20000);
   });
 
-  it("early-retirement TFSA transfer uses inflation-adjusted 7k room", () => {
+  it("rrsp-meltdown TFSA transfer uses inflation-adjusted 7k room", () => {
     let netNeeded = 20000;
     let taxableIncome = 40000;
     const balances = { rrsp: 100000, tfsa: 10000, nonreg: 100000 };
