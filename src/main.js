@@ -52,20 +52,12 @@ document.addEventListener("DOMContentLoaded", () => {
     "rrifStartAge",
     "enforceRrifMin",
     "strategy",
-    "strategyMode",
     "enableMonteCarlo",
     "mcTrials",
     "mcVolatility",
     "mcInflationVolatility",
     "mcBadYearSpendCut",
     "mcSeed",
-    "wTax",
-    "wOas",
-    "wEstate",
-    "wSuccess",
-    "outcomePreset",
-    "requireMinSuccess",
-    "minSuccess",
   ];
 
   const formatCurrency = (num) => {
@@ -489,7 +481,6 @@ document.addEventListener("DOMContentLoaded", () => {
         runMonteCarlo,
         solveSustainableSpending,
         runDeterministicProjection,
-        getNormalizedOutcomeWeights,
         formatCurrency,
         onSolveStart: () => {
           if (!runStatusEl) return;
@@ -499,27 +490,6 @@ document.addEventListener("DOMContentLoaded", () => {
         onSolveIteration: (msg) => {
           if (!runStatusEl) return;
           runStatusEl.innerText = msg;
-        },
-        onAdvancedPolicyProgress: (ageAtYear) => {
-          if (!runStatusEl) return;
-          runStatusEl.style.color = "#0369a1";
-          runStatusEl.innerText = `Constructing outcome-based policy: age ${ageAtYear}`;
-          if (runBtn) {
-            runBtn.disabled = true;
-            runBtn.innerText = "Optimizing...";
-          }
-        },
-        onAdvancedYearProgress: async (
-          yearIndex,
-          ageAtYear,
-          projectionAge,
-          startAge,
-        ) => {
-          if (!runStatusEl) return;
-          const totalYears = Math.max(1, projectionAge - startAge + 1);
-          runStatusEl.style.color = "#0369a1";
-          runStatusEl.innerText = `Constructing advanced policy: year ${yearIndex + 1}/${totalYears} (age ${ageAtYear})`;
-          await new Promise((resolve) => setTimeout(resolve, 0));
         },
         onMonteCarloStart: (trials) => {
           if (runStatusEl) {
@@ -644,7 +614,6 @@ document.addEventListener("DOMContentLoaded", () => {
         outcome.solvedSpendOutput,
         outcome.targetSuccessRate,
         outcome.spendingMode,
-        outcome.selectedStrategyMode,
       );
     } finally {
       isRecalculating = false;
@@ -660,72 +629,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // Debounce change-driven reruns to avoid recomputing on every keystroke burst.
     if (recalcTimer) clearTimeout(recalcTimer);
     const enabled = document.getElementById("enableMonteCarlo").checked;
-    const runStatusEl = document.getElementById("runStatus");
-    const advancedMix =
-      document.getElementById("strategyMode")?.value === "advanced";
-    if (runStatusEl && advancedMix) {
-      runStatusEl.style.color = "#0369a1";
-      runStatusEl.innerText = "Updating outcome-based strategy...";
-    }
     recalcTimer = setTimeout(() => {
       calculateRetirement(!enabled);
     }, 180);
-  }
-
-  function deferOutcomeBasedExecutionNotice() {
-    const runStatusEl = document.getElementById("runStatus");
-    if (!runStatusEl) return;
-    runStatusEl.style.color = "#64748b";
-    runStatusEl.innerText =
-      "Outcome settings changed. Click Run Simulation to apply.";
   }
 
   function updateMonteCarloSettingsVisibility() {
     const enabled = document.getElementById("enableMonteCarlo").checked;
     const box = document.getElementById("mcSettingsBox");
     if (box) box.style.display = enabled ? "block" : "none";
-  }
-
-  function updateOutcomeSettingsVisibility() {
-    // Advanced mode hides simple strategy selector because policy is optimizer-driven.
-    const mode = document.getElementById("strategyMode")?.value;
-    const enabled = mode === "advanced";
-    const box = document.getElementById("outcomeSettings");
-    const hint = document.getElementById("advancedModeHint");
-    const simpleGroup = document.getElementById("simpleStrategyGroup");
-    const simpleSelect = document.getElementById("strategy");
-    if (box) box.style.display = enabled ? "block" : "none";
-    if (hint) hint.style.display = enabled ? "block" : "none";
-    if (simpleGroup) simpleGroup.style.display = enabled ? "none" : "block";
-    if (simpleSelect) simpleSelect.disabled = enabled;
-  }
-
-  function applyOutcomePreset(preset) {
-    const map = {
-      balanced: { wTax: 30, wOas: 20, wEstate: 20, wSuccess: 30 },
-      tax: { wTax: 60, wOas: 15, wEstate: 10, wSuccess: 15 },
-      oas: { wTax: 15, wOas: 60, wEstate: 10, wSuccess: 15 },
-      estate: { wTax: 15, wOas: 10, wEstate: 60, wSuccess: 15 },
-      success: { wTax: 15, wOas: 10, wEstate: 10, wSuccess: 65 },
-    };
-    if (preset === "custom") return;
-    const p = map[preset] || map.balanced;
-    ["wTax", "wOas", "wEstate", "wSuccess"].forEach((k) => {
-      const el = document.getElementById(k);
-      if (el) el.value = p[k];
-    });
-  }
-
-  function updateOutcomePresetLockState() {
-    const preset = document.getElementById("outcomePreset")?.value;
-    const isCustom = preset === "custom";
-    ["wTax", "wOas", "wEstate", "wSuccess"].forEach((k) => {
-      const el = document.getElementById(k);
-      if (!el) return;
-      el.disabled = !isCustom;
-      el.style.backgroundColor = isCustom ? "#fff" : "#f1f5f9";
-      el.style.cursor = isCustom ? "text" : "not-allowed";
-    });
   }
 
   function setupCollapsibleSections() {
@@ -746,7 +658,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Old Age Security (OAS)": false,
       "RRIF Minimum Withdrawals": false,
       "Withdrawal Strategy": true,
-      "Monte Carlo Simulation ?": true,
+      "Monte Carlo Simulation": true,
       "Display Options": false,
     };
 
@@ -786,34 +698,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch {}
       });
     });
-  }
-
-  function getNormalizedOutcomeWeights() {
-    const wTax = Math.max(
-      0,
-      parseFloat(document.getElementById("wTax").value) || 0,
-    );
-    const wOas = Math.max(
-      0,
-      parseFloat(document.getElementById("wOas").value) || 0,
-    );
-    const wEstate = Math.max(
-      0,
-      parseFloat(document.getElementById("wEstate").value) || 0,
-    );
-    const wSuccess = Math.max(
-      0,
-      parseFloat(document.getElementById("wSuccess").value) || 0,
-    );
-    const sum = wTax + wOas + wEstate + wSuccess;
-    if (sum <= 0)
-      return { wTax: 0.25, wOas: 0.25, wEstate: 0.25, wSuccess: 0.25 };
-    return {
-      wTax: wTax / sum,
-      wOas: wOas / sum,
-      wEstate: wEstate / sum,
-      wSuccess: wSuccess / sum,
-    };
   }
 
   function updateSpendingModeVisibility() {
@@ -892,7 +776,6 @@ document.addEventListener("DOMContentLoaded", () => {
     solvedSpendOutput,
     targetSuccessRate,
     spendingMode,
-    selectedStrategy,
   ) {
     // Presentation layer only: charts, table, summary cards, and explanatory copy.
     const displayInflated = document.getElementById("displayMode").checked;
@@ -983,19 +866,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="summary-value">${formatCurrency(totClawback)}</div>
             </div>
         `;
-
-    const existing = document.getElementById("optimizedStrategyNote");
-    if (existing) existing.remove();
-    if (selectedStrategy === "outcome-based") {
-      const note = document.createElement("div");
-      note.id = "optimizedStrategyNote";
-      note.style.marginTop = "10px";
-      note.style.fontSize = "0.82rem";
-      note.style.color = "#475569";
-      note.innerText =
-        "Outcome-based mode constructs a deterministic year-by-year draw mix from your weight settings.";
-      document.getElementById("summaryGrid").after(note);
-    }
 
     const mcEl = document.getElementById("mcSummary");
     if (monteCarloEnabled && monteCarloResults) {
@@ -1334,26 +1204,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSpendingSchedule();
   updateMonteCarloSettingsVisibility();
   updateSpendingModeVisibility();
-  updateOutcomeSettingsVisibility();
-
-  const outcomePresetEl = document.getElementById("outcomePreset");
-  if (outcomePresetEl) {
-    applyOutcomePreset(outcomePresetEl.value);
-    updateOutcomePresetLockState();
-    outcomePresetEl.addEventListener("change", () => {
-      suppressInputChangeRecalc = true;
-      applyOutcomePreset(outcomePresetEl.value);
-      updateOutcomePresetLockState();
-      saveInputs();
-      const advancedMix =
-        document.getElementById("strategyMode")?.value === "advanced";
-      if (advancedMix) deferOutcomeBasedExecutionNotice();
-      else recalculateForUiChange();
-      setTimeout(() => {
-        suppressInputChangeRecalc = false;
-      }, 0);
-    });
-  }
 
   const spendingModeToggle = document.getElementById("spendingModeToggle");
   if (spendingModeToggle) {
@@ -1464,18 +1314,7 @@ document.addEventListener("DOMContentLoaded", () => {
       el.addEventListener("change", () => {
         if (suppressInputChangeRecalc) return;
         if (id === "enableMonteCarlo") updateMonteCarloSettingsVisibility();
-        if (id === "strategy" || id === "strategyMode")
-          updateOutcomeSettingsVisibility();
         if (id === "spendingMode") updateSpendingModeVisibility();
-
-        if (
-          id === "strategyMode" &&
-          document.getElementById("strategyMode")?.value === "advanced"
-        ) {
-          saveInputs();
-          deferOutcomeBasedExecutionNotice();
-          return;
-        }
 
         if (id === "age" || id === "spending" || id === "lifeExpectancy") {
           const rows = document.querySelectorAll(
@@ -1490,23 +1329,6 @@ document.addEventListener("DOMContentLoaded", () => {
               r.querySelector(".sched-end").value = el.value;
             saveSpendingSchedule();
           }
-        }
-
-        const advancedMix =
-          document.getElementById("strategyMode")?.value === "advanced";
-        const outcomeSettingIds = [
-          "wTax",
-          "wOas",
-          "wEstate",
-          "wSuccess",
-          "outcomePreset",
-          "requireMinSuccess",
-          "minSuccess",
-        ];
-        if (advancedMix && outcomeSettingIds.includes(id)) {
-          saveInputs();
-          deferOutcomeBasedExecutionNotice();
-          return;
         }
 
         recalculateForUiChange();
@@ -1529,12 +1351,5 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Run initial calculation (skip heavy advanced auto-run)
-  const initialAdvancedMode =
-    document.getElementById("strategyMode")?.value === "advanced";
-  if (initialAdvancedMode) {
-    deferOutcomeBasedExecutionNotice();
-  } else {
-    calculateRetirement(false);
-  }
+  calculateRetirement(false);
 });

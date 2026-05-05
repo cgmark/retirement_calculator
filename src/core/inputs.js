@@ -42,10 +42,6 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   const rrifStartAge = parseInt(doc.getElementById("rrifStartAge").value);
   const enforceRrifMin = doc.getElementById("enforceRrifMin").value === "yes";
   const strategy = doc.getElementById("strategy").value;
-  const strategyMode = doc.getElementById("strategyMode").value;
-  // Advanced mode always routes to outcome-based strategy construction.
-  const selectedStrategyMode =
-    strategyMode === "advanced" ? "outcome-based" : strategy;
   const enableMonteCarlo = doc.getElementById("enableMonteCarlo").checked;
   const mcTrials = Math.max(
     100,
@@ -90,7 +86,6 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     rrifStartAge,
     enforceRrifMin,
     strategy,
-    selectedStrategyMode,
     enableMonteCarlo,
     mcTrials,
     mcVolatility,
