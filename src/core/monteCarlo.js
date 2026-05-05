@@ -4,7 +4,6 @@ import { createSeededRng, randomNormal, percentile } from "./random.js";
 import { getBaseSpendingForAge } from "./spending.js";
 import {
   applyProportionalDraw,
-  applyWeightedMixDraw,
   applySequenceDraw,
   applyEarlyRetirementDraw,
 } from "./withdrawalStrategy.js";
@@ -47,7 +46,6 @@ export async function runMonteCarlo(params) {
     seed,
     onProgress,
     shouldCancel,
-    constructedMixByAge,
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -220,17 +218,6 @@ export async function runMonteCarlo(params) {
             getBalances: () => ({ rrsp, tfsa, nonreg }),
             getNetNeeded: () => netNeeded,
             executeDraw,
-          });
-        } else if (strategy === "outcome-based") {
-          const mix =
-            constructedMixByAge && constructedMixByAge[currentAge]
-              ? constructedMixByAge[currentAge]
-              : { tfsa: 1 / 3, nonreg: 1 / 3, rrsp: 1 / 3 };
-          applyWeightedMixDraw({
-            getBalances: () => ({ rrsp, tfsa, nonreg }),
-            getNetNeeded: () => netNeeded,
-            executeDraw,
-            mix,
           });
         } else if (
           strategy === "early-retirement" ||

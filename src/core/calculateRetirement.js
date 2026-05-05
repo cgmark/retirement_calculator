@@ -6,12 +6,9 @@ export async function runRetirementCalculation(params) {
     runMonteCarlo,
     solveSustainableSpending,
     runDeterministicProjection,
-    getNormalizedOutcomeWeights,
     formatCurrency,
     onSolveStart,
     onSolveIteration,
-    onAdvancedPolicyProgress,
-    onAdvancedYearProgress,
     onMonteCarloStart,
     onMonteCarloProgress,
     shouldCancel,
@@ -38,7 +35,6 @@ export async function runRetirementCalculation(params) {
     rrifStartAge,
     enforceRrifMin,
     strategy,
-    selectedStrategyMode,
     enableMonteCarlo,
     mcTrials,
     mcVolatility,
@@ -99,12 +95,10 @@ export async function runRetirementCalculation(params) {
   }
 
   const activeSchedule = spendingMode === "solve" ? [] : spendingSchedule;
-  const effectiveStrategy = selectedStrategyMode;
-  const showAdvancedProgress =
-    selectedStrategyMode === "outcome-based" && runMonteCarloNow;
+  const effectiveStrategy = strategy;
 
   // Deterministic baseline path is always computed (also used for charts/tables).
-  const { results, constructedMixByAge } = await runDeterministicProjection({
+  const { results } = await runDeterministicProjection({
     age,
     rrspStart: rrsp,
     tfsaStart: tfsa,
@@ -122,10 +116,6 @@ export async function runRetirementCalculation(params) {
     rrifStartAge,
     enforceRrifMin,
     effectiveStrategy,
-    getNormalizedOutcomeWeights,
-    showAdvancedProgress,
-    onOutcomePolicyProgress: onAdvancedPolicyProgress,
-    onAdvancedYearProgress,
   });
 
   let monteCarloResults = null;
@@ -158,8 +148,6 @@ export async function runRetirementCalculation(params) {
       inflationVolatility: mcInflationVolatility,
       badYearSpendCutPct: mcBadYearSpendCutPct,
       seed: mcSeed,
-      constructedMixByAge:
-        effectiveStrategy === "outcome-based" ? constructedMixByAge : null,
       onProgress: onMonteCarloProgress,
       shouldCancel,
     });
@@ -189,10 +177,8 @@ export async function runRetirementCalculation(params) {
     shouldPromptEnableMcForSolve,
     targetSuccessRate,
     spendingMode,
-    selectedStrategyMode,
     effectiveStrategy,
     enableMonteCarlo,
     runMonteCarloNow,
-    showAdvancedProgress,
   };
 }

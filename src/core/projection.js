@@ -3,11 +3,9 @@ import { getRrifMinimumRate } from "./rrif.js";
 import { getBaseSpendingForAge } from "./spending.js";
 import {
   applyProportionalDraw,
-  applyWeightedMixDraw,
   applySequenceDraw,
   applyEarlyRetirementDraw,
 } from "./withdrawalStrategy.js";
-import { chooseOutcomeMix } from "./outcomeStrategy.js";
 
 export async function runDeterministicProjection(params) {
   const {
@@ -28,10 +26,6 @@ export async function runDeterministicProjection(params) {
     rrifStartAge,
     enforceRrifMin,
     effectiveStrategy,
-    getNormalizedOutcomeWeights,
-    showAdvancedProgress,
-    onOutcomePolicyProgress,
-    onAdvancedYearProgress,
   } = params;
 
   let rrsp = rrspStart;
@@ -41,7 +35,6 @@ export async function runDeterministicProjection(params) {
 
   const results = [];
   let isDepleted = false;
-  const constructedMixByAge = {};
 
   // Baseline projection is deterministic: fixed growth/inflation by year index.
   for (let i = 0; age + i <= lifeExpectancy; i++) {
@@ -180,43 +173,6 @@ export async function runDeterministicProjection(params) {
           getNetNeeded: () => netNeeded,
           executeDraw,
         });
-      } else if (effectiveStrategy === "outcome-based") {
-        const weights = getNormalizedOutcomeWeights();
-        if (typeof onOutcomePolicyProgress === "function" && i % 3 === 0) {
-          onOutcomePolicyProgress(currentAge);
-        }
-        const normalizedMix = chooseOutcomeMix({
-          currentAge,
-          startAge: age,
-          lifeExpectancy,
-          inflation,
-          growth,
-          provCode,
-          cppScenarioAge,
-          selectedCPPMonthly,
-          oasPercent,
-          rrifStartAge,
-          enforceRrifMin,
-          baseSpending,
-          activeSchedule,
-          weights,
-          probeNeed: netNeeded,
-          currentState: {
-            rrsp,
-            tfsa,
-            nonreg,
-            acb: currentAcb,
-            taxableIncome: currentTaxableIncome,
-          },
-        });
-        constructedMixByAge[currentAge] = normalizedMix;
-
-        applyWeightedMixDraw({
-          getBalances: () => ({ rrsp, tfsa, nonreg }),
-          getNetNeeded: () => netNeeded,
-          executeDraw,
-          mix: normalizedMix,
-        });
       } else if (
         effectiveStrategy === "early-retirement" ||
         effectiveStrategy === "early-retirement-plus10" ||
@@ -260,7 +216,6 @@ export async function runDeterministicProjection(params) {
 
     if (
       effectiveStrategy !== "proportional" &&
-      effectiveStrategy !== "outcome-based" &&
       effectiveStrategy !== "early-retirement" &&
       effectiveStrategy !== "early-retirement-plus10" &&
       effectiveStrategy !== "early-retirement-plus20" &&
@@ -305,8 +260,6 @@ export async function runDeterministicProjection(params) {
     }
 
     debugFinalTaxableIncome = currentTaxableIncome;
-    const selectedMix = constructedMixByAge[currentAge] || null;
-
     const totalAssets = rrsp + tfsa + nonreg;
     if (netNeeded > 1) isDepleted = true;
 
@@ -330,15 +283,11 @@ export async function runDeterministicProjection(params) {
       netShortfall: netNeeded,
       taxableIncome: debugFinalTaxableIncome,
       clawbackIterations: debugClawbackIterations,
-      mixTFSA: selectedMix ? selectedMix.tfsa : null,
-      mixNonReg: selectedMix ? selectedMix.nonreg : null,
-      mixRRSP: selectedMix ? selectedMix.rrsp : null,
+      mixTFSA: null,
+      mixNonReg: null,
+      mixRRSP: null,
       depleted: isDepleted,
     });
-
-    if (showAdvancedProgress && typeof onAdvancedYearProgress === "function") {
-      await onAdvancedYearProgress(i, currentAge, lifeExpectancy, age);
-    }
 
     if (isDepleted) break;
 
@@ -347,5 +296,5 @@ export async function runDeterministicProjection(params) {
     nonreg *= 1 + growth;
   }
 
-  return { results, constructedMixByAge, effectiveStrategy };
+  return { results, effectiveStrategy };
 }
