@@ -72,26 +72,26 @@ describe("runMonteCarlo", () => {
     expect(res.trials).toBeLessThan(res.requestedTrials);
   });
 
-  it("runs with early-retirement strategy", async () => {
+  it("runs with rrsp-meltdown strategy", async () => {
     const res = await runMonteCarlo(
-      baseParams({ strategy: "early-retirement", seed: 777, trials: 80 }),
+      baseParams({ strategy: "rrsp-meltdown", seed: 777, trials: 80 }),
     );
     expect(res.trials).toBe(80);
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("runs with early-retirement +10% and +20% strategies", async () => {
+  it("runs with rrsp-meltdown +10% and +20% strategies", async () => {
     const plus10 = await runMonteCarlo(
       baseParams({
-        strategy: "early-retirement-plus10",
+        strategy: "rrsp-meltdown-plus10",
         seed: 778,
         trials: 60,
       }),
     );
     const plus20 = await runMonteCarlo(
       baseParams({
-        strategy: "early-retirement-plus20",
+        strategy: "rrsp-meltdown-plus20",
         seed: 779,
         trials: 60,
       }),
@@ -101,10 +101,10 @@ describe("runMonteCarlo", () => {
     expect(plus20.trials).toBe(60);
   });
 
-  it("runs with early-retirement TFSA transfer strategy", async () => {
+  it("runs with rrsp-meltdown TFSA transfer strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
-        strategy: "early-retirement-tfsa-transfer",
+        strategy: "rrsp-meltdown-tfsa-transfer",
         seed: 780,
         trials: 60,
       }),
@@ -115,10 +115,10 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("runs with early-retirement TFSA transfer opportunistic TFSA strategy", async () => {
+  it("runs with rrsp-meltdown TFSA transfer opportunistic TFSA strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
-        strategy: "early-retirement-tfsa-transfer-opportunistic-tfsa",
+        strategy: "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
         seed: 781,
         trials: 60,
       }),

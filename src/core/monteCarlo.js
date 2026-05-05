@@ -222,16 +222,16 @@ export async function runMonteCarlo(params) {
             executeDraw,
           });
         } else if (
-          strategy === "early-retirement" ||
-          strategy === "early-retirement-plus10" ||
-          strategy === "early-retirement-plus20" ||
-          strategy === "early-retirement-tfsa-transfer" ||
-          strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa"
+          strategy === "rrsp-meltdown" ||
+          strategy === "rrsp-meltdown-plus10" ||
+          strategy === "rrsp-meltdown-plus20" ||
+          strategy === "rrsp-meltdown-tfsa-transfer" ||
+          strategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa"
         ) {
           const overshootPct =
-            strategy === "early-retirement-plus20"
+            strategy === "rrsp-meltdown-plus20"
               ? 0.2
-              : strategy === "early-retirement-plus10"
+              : strategy === "rrsp-meltdown-plus10"
                 ? 0.1
                 : 0;
           applyEarlyRetirementDraw({
@@ -245,10 +245,10 @@ export async function runMonteCarlo(params) {
             inflationFactor,
             overshootPct,
             enableTfsaTransfer:
-              strategy === "early-retirement-tfsa-transfer" ||
-              strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa",
+              strategy === "rrsp-meltdown-tfsa-transfer" ||
+              strategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
             opportunisticTfsa:
-              strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa",
+              strategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
             onTfsaTransfer: (transferAmount) => {
               tfsa += transferAmount;
               netNeeded += transferAmount;

@@ -174,17 +174,16 @@ export async function runDeterministicProjection(params) {
           executeDraw,
         });
       } else if (
-        effectiveStrategy === "early-retirement" ||
-        effectiveStrategy === "early-retirement-plus10" ||
-        effectiveStrategy === "early-retirement-plus20" ||
-        effectiveStrategy === "early-retirement-tfsa-transfer" ||
-        effectiveStrategy ===
-          "early-retirement-tfsa-transfer-opportunistic-tfsa"
+        effectiveStrategy === "rrsp-meltdown" ||
+        effectiveStrategy === "rrsp-meltdown-plus10" ||
+        effectiveStrategy === "rrsp-meltdown-plus20" ||
+        effectiveStrategy === "rrsp-meltdown-tfsa-transfer" ||
+        effectiveStrategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa"
       ) {
         const overshootPct =
-          effectiveStrategy === "early-retirement-plus20"
+          effectiveStrategy === "rrsp-meltdown-plus20"
             ? 0.2
-            : effectiveStrategy === "early-retirement-plus10"
+            : effectiveStrategy === "rrsp-meltdown-plus10"
               ? 0.1
               : 0;
         applyEarlyRetirementDraw({
@@ -198,12 +197,12 @@ export async function runDeterministicProjection(params) {
           inflationFactor,
           overshootPct,
           enableTfsaTransfer:
-            effectiveStrategy === "early-retirement-tfsa-transfer" ||
+            effectiveStrategy === "rrsp-meltdown-tfsa-transfer" ||
             effectiveStrategy ===
-              "early-retirement-tfsa-transfer-opportunistic-tfsa",
+              "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
           opportunisticTfsa:
             effectiveStrategy ===
-            "early-retirement-tfsa-transfer-opportunistic-tfsa",
+            "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
           onTfsaTransfer: (transferAmount) => {
             tfsa += transferAmount;
             netNeeded += transferAmount;
@@ -224,12 +223,11 @@ export async function runDeterministicProjection(params) {
 
     if (
       effectiveStrategy !== "proportional" &&
-      effectiveStrategy !== "early-retirement" &&
-      effectiveStrategy !== "early-retirement-plus10" &&
-      effectiveStrategy !== "early-retirement-plus20" &&
-      effectiveStrategy !== "early-retirement-tfsa-transfer" &&
-      effectiveStrategy !==
-        "early-retirement-tfsa-transfer-opportunistic-tfsa" &&
+      effectiveStrategy !== "rrsp-meltdown" &&
+      effectiveStrategy !== "rrsp-meltdown-plus10" &&
+      effectiveStrategy !== "rrsp-meltdown-plus20" &&
+      effectiveStrategy !== "rrsp-meltdown-tfsa-transfer" &&
+      effectiveStrategy !== "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa" &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({
