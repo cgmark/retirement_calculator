@@ -114,6 +114,7 @@ export async function runMonteCarlo(params) {
 
       let totalIncomeTaxThisYear = 0;
       let oasClawbackThisYear = 0;
+      let mandatoryRrifDrawThisYear = 0;
       let grossCPP = 0,
         grossOAS = 0;
       let netNeeded = 0;
@@ -145,6 +146,7 @@ export async function runMonteCarlo(params) {
               inflationFactor,
             ) - calculateTax(currentTaxableIncome, provCode, inflationFactor);
           rrsp -= mandatoryGross;
+          mandatoryRrifDrawThisYear += mandatoryGross;
           currentTaxableIncome += mandatoryGross;
           totalIncomeTaxThisYear += mandatoryTax;
           netGovIncome += mandatoryGross - mandatoryTax;
@@ -223,7 +225,8 @@ export async function runMonteCarlo(params) {
           strategy === "early-retirement" ||
           strategy === "early-retirement-plus10" ||
           strategy === "early-retirement-plus20" ||
-          strategy === "early-retirement-tfsa-transfer"
+          strategy === "early-retirement-tfsa-transfer" ||
+          strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa"
         ) {
           const overshootPct =
             strategy === "early-retirement-plus20"
@@ -236,11 +239,16 @@ export async function runMonteCarlo(params) {
             getNetNeeded: () => netNeeded,
             getCurrentTaxableIncome: () => currentTaxableIncome,
             getGrossOAS: () => grossOAS,
+            getMandatoryRrifDraw: () => mandatoryRrifDrawThisYear,
             executeDraw,
             provCode,
             inflationFactor,
             overshootPct,
-            enableTfsaTransfer: strategy === "early-retirement-tfsa-transfer",
+            enableTfsaTransfer:
+              strategy === "early-retirement-tfsa-transfer" ||
+              strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa",
+            opportunisticTfsa:
+              strategy === "early-retirement-tfsa-transfer-opportunistic-tfsa",
             onTfsaTransfer: (transferAmount) => {
               tfsa += transferAmount;
               netNeeded += transferAmount;

@@ -177,7 +177,9 @@ export async function runDeterministicProjection(params) {
         effectiveStrategy === "early-retirement" ||
         effectiveStrategy === "early-retirement-plus10" ||
         effectiveStrategy === "early-retirement-plus20" ||
-        effectiveStrategy === "early-retirement-tfsa-transfer"
+        effectiveStrategy === "early-retirement-tfsa-transfer" ||
+        effectiveStrategy ===
+          "early-retirement-tfsa-transfer-opportunistic-tfsa"
       ) {
         const overshootPct =
           effectiveStrategy === "early-retirement-plus20"
@@ -190,12 +192,18 @@ export async function runDeterministicProjection(params) {
           getNetNeeded: () => netNeeded,
           getCurrentTaxableIncome: () => currentTaxableIncome,
           getGrossOAS: () => grossOAS,
+          getMandatoryRrifDraw: () => mandatoryRrifDrawThisYear,
           executeDraw,
           provCode,
           inflationFactor,
           overshootPct,
           enableTfsaTransfer:
-            effectiveStrategy === "early-retirement-tfsa-transfer",
+            effectiveStrategy === "early-retirement-tfsa-transfer" ||
+            effectiveStrategy ===
+              "early-retirement-tfsa-transfer-opportunistic-tfsa",
+          opportunisticTfsa:
+            effectiveStrategy ===
+            "early-retirement-tfsa-transfer-opportunistic-tfsa",
           onTfsaTransfer: (transferAmount) => {
             tfsa += transferAmount;
             netNeeded += transferAmount;
@@ -220,6 +228,8 @@ export async function runDeterministicProjection(params) {
       effectiveStrategy !== "early-retirement-plus10" &&
       effectiveStrategy !== "early-retirement-plus20" &&
       effectiveStrategy !== "early-retirement-tfsa-transfer" &&
+      effectiveStrategy !==
+        "early-retirement-tfsa-transfer-opportunistic-tfsa" &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({

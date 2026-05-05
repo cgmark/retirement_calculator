@@ -115,6 +115,20 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
+  it("runs with early-retirement TFSA transfer opportunistic TFSA strategy", async () => {
+    const res = await runMonteCarlo(
+      baseParams({
+        strategy: "early-retirement-tfsa-transfer-opportunistic-tfsa",
+        seed: 781,
+        trials: 60,
+      }),
+    );
+
+    expect(res.trials).toBe(60);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
+  });
+
   it("applies spending cut in negative-return years", async () => {
     const noCut = await runMonteCarlo(
       baseParams({
