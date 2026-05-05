@@ -43,6 +43,7 @@ export async function runMonteCarlo(params) {
     trials,
     volatility,
     inflationVolatility,
+    badYearSpendCutPct = 0,
     seed,
     onProgress,
     shouldCancel,
@@ -95,6 +96,14 @@ export async function runMonteCarlo(params) {
 
     for (let i = 0; age + i <= projectionAge; i++) {
       const currentAge = age + i;
+      const shouldApplyBadYearCut = badYearSpendCutPct > 0;
+      const sampledGrowthForSpending = shouldApplyBadYearCut
+        ? growth + volatility * randomNormal(rng)
+        : null;
+      const spendingReductionFactor =
+        sampledGrowthForSpending !== null && sampledGrowthForSpending < 0
+          ? 1 - badYearSpendCutPct
+          : 1;
       // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
       const inflationFactor = mcInflationFactor;
       const ageBaseSpending = getBaseSpendingForAge(
@@ -102,7 +111,8 @@ export async function runMonteCarlo(params) {
         baseSpending,
         spendingSchedule,
       );
-      const targetSpending = ageBaseSpending * inflationFactor;
+      const targetSpending =
+        ageBaseSpending * inflationFactor * spendingReductionFactor;
 
       let totalIncomeTaxThisYear = 0;
       let oasClawbackThisYear = 0;
@@ -304,7 +314,10 @@ export async function runMonteCarlo(params) {
       }
 
       // Shock returns/inflation independently each year for this path.
-      const sampledGrowth = growth + volatility * randomNormal(rng);
+      const sampledGrowth =
+        sampledGrowthForSpending !== null
+          ? sampledGrowthForSpending
+          : growth + volatility * randomNormal(rng);
       const yearlyGrowth = Math.max(-0.95, sampledGrowth);
       const sampledInflation =
         inflation + inflationVolatility * randomNormal(rng);

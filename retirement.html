@@ -756,25 +756,7 @@
             </div>
 
             <div class="input-section" id="mcSection">
-              <h4 style="margin-bottom: 10px">
-                Monte Carlo Simulation
-                <span
-                  title="Runs your plan many times with different yearly market and inflation paths to estimate probability of success/failure."
-                  style="
-                    display: inline-block;
-                    width: 16px;
-                    height: 16px;
-                    line-height: 16px;
-                    text-align: center;
-                    border-radius: 50%;
-                    border: 1px solid #94a3b8;
-                    font-size: 0.75rem;
-                    color: #475569;
-                    vertical-align: middle;
-                  "
-                  >?</span
-                >
-              </h4>
+              <h4 style="margin-bottom: 10px">Monte Carlo Simulation</h4>
               <div class="form-group" style="margin-top: 10px">
                 <label
                   style="
@@ -813,54 +795,82 @@
                 >
                   Simulation Settings
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label
-                      title="How many random futures to test. More trials are smoother but slower."
-                      >MC Trials</label
-                    ><input
-                      type="number"
-                      id="mcTrials"
-                      value="500"
-                      min="100"
-                      max="10000"
-                      step="100"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label
-                      title="How much yearly investment returns can swing up or down around your expected growth rate."
-                      >Return Volatility (%)</label
-                    ><input
-                      type="number"
-                      id="mcVolatility"
-                      value="12"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
+                    for="mcTrials"
+                    title="How many random futures to test. More trials are smoother but slower."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >MC Trials</label
+                  ><input
+                    type="number"
+                    id="mcTrials"
+                    value="500"
+                    min="100"
+                    max="10000"
+                    step="100"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label
-                      title="How much yearly inflation can vary around your base inflation input."
-                      >Inflation Volatility (%)</label
-                    ><input
-                      type="number"
-                      id="mcInflationVolatility"
-                      value="1.5"
-                      min="0"
-                      max="20"
-                      step="0.1"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label
-                      title="Use a fixed number to repeat the same random simulation results."
-                      >Seed (optional)</label
-                    ><input type="number" id="mcSeed" value="" />
-                  </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
+                    for="mcVolatility"
+                    title="How much yearly investment returns can swing up or down around your expected growth rate."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Return Volatility (%)</label
+                  ><input
+                    type="number"
+                    id="mcVolatility"
+                    value="12"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
+                    for="mcInflationVolatility"
+                    title="How much yearly inflation can vary around your base inflation input."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Inflation Volatility (%)</label
+                  ><input
+                    type="number"
+                    id="mcInflationVolatility"
+                    value="1.5"
+                    min="0"
+                    max="20"
+                    step="0.1"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
+                    for="mcBadYearSpendCut"
+                    title="If a year has a negative market return, reduce that year's net spending target by this percent."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Negative return spending cut (%)</label
+                  ><input
+                    type="number"
+                    id="mcBadYearSpendCut"
+                    value="0"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
+                    for="mcSeed"
+                    title="Use a fixed number to repeat the same random simulation results."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Seed (optional)</label
+                  ><input
+                    type="number"
+                    id="mcSeed"
+                    value=""
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
                 </div>
                 <div style="font-size: 0.8rem; color: #64748b">
                   Annual inflation shocks are allowed down to -3% and capped at

@@ -23,6 +23,7 @@ function baseParams(overrides = {}) {
     trials: 120,
     volatility: 0.12,
     inflationVolatility: 0.01,
+    badYearSpendCutPct: 0,
     seed: 123,
     ...overrides,
   };
@@ -112,5 +113,26 @@ describe("runMonteCarlo", () => {
     expect(res.trials).toBe(60);
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
+  });
+
+  it("applies spending cut in negative-return years", async () => {
+    const noCut = await runMonteCarlo(
+      baseParams({
+        trials: 80,
+        seed: 888,
+        badYearSpendCutPct: 0,
+        volatility: 0.18,
+      }),
+    );
+    const withCut = await runMonteCarlo(
+      baseParams({
+        trials: 80,
+        seed: 888,
+        badYearSpendCutPct: 0.2,
+        volatility: 0.18,
+      }),
+    );
+
+    expect(withCut).not.toEqual(noCut);
   });
 });
