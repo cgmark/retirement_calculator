@@ -99,4 +99,18 @@ describe("runMonteCarlo", () => {
     expect(plus10.trials).toBe(60);
     expect(plus20.trials).toBe(60);
   });
+
+  it("runs with early-retirement TFSA transfer strategy", async () => {
+    const res = await runMonteCarlo(
+      baseParams({
+        strategy: "early-retirement-tfsa-transfer",
+        seed: 780,
+        trials: 60,
+      }),
+    );
+
+    expect(res.trials).toBe(60);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
+  });
 });

@@ -225,7 +225,8 @@ export async function runMonteCarlo(params) {
         } else if (
           strategy === "early-retirement" ||
           strategy === "early-retirement-plus10" ||
-          strategy === "early-retirement-plus20"
+          strategy === "early-retirement-plus20" ||
+          strategy === "early-retirement-tfsa-transfer"
         ) {
           const overshootPct =
             strategy === "early-retirement-plus20"
@@ -242,6 +243,12 @@ export async function runMonteCarlo(params) {
             provCode,
             inflationFactor,
             overshootPct,
+            enableTfsaTransfer: strategy === "early-retirement-tfsa-transfer",
+            onTfsaTransfer: (transferAmount) => {
+              tfsa += transferAmount;
+              netNeeded += transferAmount;
+              executeDraw("nonreg", transferAmount);
+            },
           });
         } else {
           applySequenceDraw({

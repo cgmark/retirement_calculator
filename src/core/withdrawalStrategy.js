@@ -78,6 +78,8 @@ export function applyEarlyRetirementDraw({
   provCode,
   inflationFactor,
   overshootPct = 0,
+  enableTfsaTransfer = false,
+  onTfsaTransfer,
 }) {
   if (getNetNeeded() <= 0) return;
 
@@ -93,7 +95,16 @@ export function applyEarlyRetirementDraw({
   const rrspHeadroom = Math.max(0, bracketLimit - taxableIncome);
   const rrspHeadroomWithOvershoot = rrspHeadroom * (1 + overshootPct);
   if (rrspHeadroom > 0 && balances.rrsp > 0) {
+    const netNeededBeforeRrsp = getNetNeeded();
     executeDraw("rrsp", Math.min(getNetNeeded(), rrspHeadroomWithOvershoot));
+    if (enableTfsaTransfer && typeof onTfsaTransfer === "function") {
+      const rrspNetProvided = Math.max(0, netNeededBeforeRrsp - getNetNeeded());
+      const transferRoom = 7000 * inflationFactor;
+      const transferAmount = Math.min(transferRoom, rrspNetProvided);
+      if (transferAmount > 0) {
+        onTfsaTransfer(transferAmount);
+      }
+    }
   }
 
   if (getNetNeeded() <= 0) return;

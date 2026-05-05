@@ -220,7 +220,8 @@ export async function runDeterministicProjection(params) {
       } else if (
         effectiveStrategy === "early-retirement" ||
         effectiveStrategy === "early-retirement-plus10" ||
-        effectiveStrategy === "early-retirement-plus20"
+        effectiveStrategy === "early-retirement-plus20" ||
+        effectiveStrategy === "early-retirement-tfsa-transfer"
       ) {
         const overshootPct =
           effectiveStrategy === "early-retirement-plus20"
@@ -237,6 +238,13 @@ export async function runDeterministicProjection(params) {
           provCode,
           inflationFactor,
           overshootPct,
+          enableTfsaTransfer:
+            effectiveStrategy === "early-retirement-tfsa-transfer",
+          onTfsaTransfer: (transferAmount) => {
+            tfsa += transferAmount;
+            netNeeded += transferAmount;
+            executeDraw("nonreg", transferAmount);
+          },
         });
       } else {
         applySequenceDraw({
@@ -256,6 +264,7 @@ export async function runDeterministicProjection(params) {
       effectiveStrategy !== "early-retirement" &&
       effectiveStrategy !== "early-retirement-plus10" &&
       effectiveStrategy !== "early-retirement-plus20" &&
+      effectiveStrategy !== "early-retirement-tfsa-transfer" &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({
