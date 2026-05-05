@@ -137,4 +137,77 @@ describe("withdrawal strategy helpers", () => {
     const plusRrspTarget = plusCalls.find((c) => c[0] === "rrsp")?.[1] ?? 0;
     expect(plusRrspTarget).toBeGreaterThan(baseRrspTarget);
   });
+
+  it("early-retirement TFSA transfer moves RRSP draw into TFSA and backfills from nonreg", () => {
+    let netNeeded = 12000;
+    let taxableIncome = 50000;
+    const balances = { rrsp: 100000, tfsa: 20000, nonreg: 100000 };
+    const calls = [];
+
+    const executeDraw = (acc, targetNet) => {
+      calls.push([acc, targetNet]);
+      const used = Math.min(netNeeded, targetNet);
+      if (acc === "rrsp") {
+        balances.rrsp = Math.max(0, balances.rrsp - used);
+        taxableIncome += used;
+      }
+      if (acc === "nonreg") balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
+      netNeeded = Math.max(0, netNeeded - used);
+    };
+
+    applyEarlyRetirementDraw({
+      getBalances: () => balances,
+      getNetNeeded: () => netNeeded,
+      getCurrentTaxableIncome: () => taxableIncome,
+      getGrossOAS: () => 0,
+      executeDraw,
+      provCode: "ON",
+      inflationFactor: 1,
+      enableTfsaTransfer: true,
+      onTfsaTransfer: (transferAmount) => {
+        balances.tfsa += transferAmount;
+        netNeeded += transferAmount;
+        executeDraw("nonreg", transferAmount);
+      },
+    });
+
+    expect(calls[0][0]).toBe("rrsp");
+    expect(calls[1][0]).toBe("nonreg");
+    expect(balances.tfsa).toBeGreaterThan(20000);
+  });
+
+  it("early-retirement TFSA transfer uses inflation-adjusted 7k room", () => {
+    let netNeeded = 20000;
+    let taxableIncome = 40000;
+    const balances = { rrsp: 100000, tfsa: 10000, nonreg: 100000 };
+    let transferred = 0;
+
+    const executeDraw = (acc, targetNet) => {
+      const used = Math.min(netNeeded, targetNet);
+      if (acc === "rrsp") {
+        balances.rrsp = Math.max(0, balances.rrsp - used);
+        taxableIncome += used;
+      }
+      if (acc === "nonreg") balances.nonreg = Math.max(0, balances.nonreg - used);
+      if (acc === "tfsa") balances.tfsa = Math.max(0, balances.tfsa - used);
+      netNeeded = Math.max(0, netNeeded - used);
+    };
+
+    applyEarlyRetirementDraw({
+      getBalances: () => balances,
+      getNetNeeded: () => netNeeded,
+      getCurrentTaxableIncome: () => taxableIncome,
+      getGrossOAS: () => 0,
+      executeDraw,
+      provCode: "ON",
+      inflationFactor: 1.1,
+      enableTfsaTransfer: true,
+      onTfsaTransfer: (transferAmount) => {
+        transferred = transferAmount;
+      },
+    });
+
+    expect(transferred).toBeCloseTo(7700, 6);
+  });
 });
