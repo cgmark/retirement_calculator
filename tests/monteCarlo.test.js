@@ -101,6 +101,19 @@ describe("runMonteCarlo", () => {
     expect(plus20.trials).toBe(60);
   });
 
+  it("runs with rrsp-meltdown +50% strategy", async () => {
+    const res = await runMonteCarlo(
+      baseParams({
+        strategy: "rrsp-meltdown-plus50",
+        seed: 785,
+        trials: 60,
+      }),
+    );
+    expect(res.trials).toBe(60);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
+  });
+
   it("runs with rrsp-meltdown TFSA transfer strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
