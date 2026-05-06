@@ -1,6 +1,7 @@
 export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   // Keep all DOM parsing/clamping in one place so core modules stay UI-agnostic.
   const age = parseInt(doc.getElementById("age").value);
+  const retirementAge = parseInt(doc.getElementById("retirementAge").value);
   const rrsp = parseFloat(doc.getElementById("rrsp").value);
   const tfsa = parseFloat(doc.getElementById("tfsa").value);
   const nonreg = parseFloat(doc.getElementById("nonreg").value);
@@ -25,6 +26,10 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   const lifeExpectancy = Math.max(
     age,
     Math.min(120, parseInt(doc.getElementById("lifeExpectancy").value) || 100),
+  );
+  const grossEmploymentIncome = Math.max(
+    0,
+    parseFloat(doc.getElementById("grossEmploymentIncome").value) || 0,
   );
   const inflation = parseFloat(doc.getElementById("inflation").value) / 100;
   const growth = parseFloat(doc.getElementById("growth").value) / 100;
@@ -67,6 +72,10 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
 
   return {
     age,
+    retirementAge: Math.max(
+      age,
+      Math.min(lifeExpectancy, retirementAge || age),
+    ),
     rrsp,
     tfsa,
     nonreg,
@@ -77,6 +86,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     targetSuccessRate,
     solvePrecision,
     lifeExpectancy,
+    grossEmploymentIncome,
     inflation,
     growth,
     provCode,

@@ -109,6 +109,9 @@ export const provData = {
   },
 };
 
+export const TFSA_ANNUAL_ROOM_BASE = 7000;
+export const RRSP_ANNUAL_MAX_BASE = 32490;
+
 export function calculateTax(income, provCode, inflFactor) {
   if (income <= 0) return 0;
 
