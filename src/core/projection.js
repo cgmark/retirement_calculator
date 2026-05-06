@@ -1,4 +1,9 @@
-import { calculateTax, findGrossDraw } from "./tax.js";
+import {
+  calculateTax,
+  findGrossDraw,
+  RRSP_ANNUAL_MAX_BASE,
+  TFSA_ANNUAL_ROOM_BASE,
+} from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { getBaseSpendingForAge } from "./spending.js";
 import {
@@ -10,6 +15,7 @@ import {
 export async function runDeterministicProjection(params) {
   const {
     age,
+    retirementAge,
     rrspStart,
     tfsaStart,
     nonregStart,
@@ -17,6 +23,7 @@ export async function runDeterministicProjection(params) {
     baseSpending,
     activeSchedule,
     lifeExpectancy,
+    grossEmploymentIncome,
     inflation,
     growth,
     provCode,
@@ -58,6 +65,11 @@ export async function runDeterministicProjection(params) {
     let drawRRSP = 0;
     let drawTFSA = 0;
     let drawNonReg = 0;
+    let contribRRSP = 0;
+    let contribTFSA = 0;
+    let contribNonReg = 0;
+    let employmentIncomeGross = 0;
+    let employmentIncomeNet = 0;
     let netNeeded = 0;
 
     if (currentAge >= cppScenarioAge)
@@ -67,14 +79,23 @@ export async function runDeterministicProjection(params) {
       grossOAS = baseOASMonthly * 12 * oasPercent * inflationFactor;
     }
 
-    let currentTaxableIncome = grossCPP + grossOAS;
+    const isWorkingYear = currentAge < retirementAge;
+    if (isWorkingYear) {
+      employmentIncomeGross = grossEmploymentIncome * inflationFactor;
+    }
+
+    let currentTaxableIncome = grossCPP + grossOAS + employmentIncomeGross;
     const baseTax = calculateTax(
       currentTaxableIncome,
       provCode,
       inflationFactor,
     );
     totalIncomeTaxThisYear += baseTax;
-    let netGovIncome = currentTaxableIncome - baseTax;
+    let netAvailableIncome = currentTaxableIncome - baseTax;
+    employmentIncomeNet = Math.max(
+      0,
+      netAvailableIncome - (grossCPP + grossOAS),
+    );
 
     if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
       const rrifMinRate = getRrifMinimumRate(currentAge);
@@ -93,11 +114,32 @@ export async function runDeterministicProjection(params) {
         mandatoryRrifDrawThisYear += mandatoryGross;
         currentTaxableIncome += mandatoryGross;
         totalIncomeTaxThisYear += mandatoryTax;
-        netGovIncome += mandatoryNet;
+        netAvailableIncome += mandatoryNet;
       }
     }
 
-    netNeeded = Math.max(0, targetSpending - netGovIncome);
+    netNeeded = Math.max(0, targetSpending - netAvailableIncome);
+
+    if (isWorkingYear && netNeeded <= 0) {
+      let surplus = Math.max(0, netAvailableIncome - targetSpending);
+      const tfsaRoom = TFSA_ANNUAL_ROOM_BASE * inflationFactor;
+      const rrspRoom = Math.min(
+        employmentIncomeGross * 0.18,
+        RRSP_ANNUAL_MAX_BASE * inflationFactor,
+      );
+
+      contribTFSA = Math.min(surplus, tfsaRoom);
+      tfsa += contribTFSA;
+      surplus -= contribTFSA;
+
+      contribRRSP = Math.min(surplus, rrspRoom);
+      rrsp += contribRRSP;
+      surplus -= contribRRSP;
+
+      contribNonReg = Math.max(0, surplus);
+      nonreg += contribNonReg;
+      currentAcb += contribNonReg;
+    }
 
     // Draw helper mutates account balances and tax state in-place for this year.
     const executeDraw = (accountType, targetNet) => {
@@ -284,6 +326,11 @@ export async function runDeterministicProjection(params) {
       drawRRSP,
       drawTFSA,
       drawNonReg,
+      contribRRSP,
+      contribTFSA,
+      contribNonReg,
+      employmentIncomeGross,
+      employmentIncomeNet,
       rrsp,
       tfsa,
       nonreg,

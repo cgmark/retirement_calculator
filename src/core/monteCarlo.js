@@ -1,4 +1,9 @@
-import { calculateTax, findGrossDraw } from "./tax.js";
+import {
+  calculateTax,
+  findGrossDraw,
+  RRSP_ANNUAL_MAX_BASE,
+  TFSA_ANNUAL_ROOM_BASE,
+} from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomNormal, percentile } from "./random.js";
 import { getBaseSpendingForAge } from "./spending.js";
@@ -23,6 +28,7 @@ function getDepletionBucket(age) {
 export async function runMonteCarlo(params) {
   const {
     age,
+    retirementAge,
     rrspStart,
     tfsaStart,
     nonregStart,
@@ -39,6 +45,7 @@ export async function runMonteCarlo(params) {
     enforceRrifMin,
     strategy,
     projectionAge,
+    grossEmploymentIncome,
     trials,
     volatility,
     inflationVolatility,
@@ -117,7 +124,13 @@ export async function runMonteCarlo(params) {
       let mandatoryRrifDrawThisYear = 0;
       let grossCPP = 0,
         grossOAS = 0;
+      let employmentIncomeGross = 0;
       let netNeeded = 0;
+
+      const isWorkingYear = currentAge < retirementAge;
+      if (isWorkingYear) {
+        employmentIncomeGross = grossEmploymentIncome * inflationFactor;
+      }
 
       if (currentAge >= cppScenarioAge)
         grossCPP = selectedCPPMonthly * 12 * inflationFactor;
@@ -126,14 +139,14 @@ export async function runMonteCarlo(params) {
         grossOAS = baseOASMonthly * 12 * oasPercent * inflationFactor;
       }
 
-      let currentTaxableIncome = grossCPP + grossOAS;
+      let currentTaxableIncome = grossCPP + grossOAS + employmentIncomeGross;
       const baseTax = calculateTax(
         currentTaxableIncome,
         provCode,
         inflationFactor,
       );
       totalIncomeTaxThisYear += baseTax;
-      let netGovIncome = currentTaxableIncome - baseTax;
+      let netAvailableIncome = currentTaxableIncome - baseTax;
 
       if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
         const rrifMinRate = getRrifMinimumRate(currentAge);
@@ -149,11 +162,32 @@ export async function runMonteCarlo(params) {
           mandatoryRrifDrawThisYear += mandatoryGross;
           currentTaxableIncome += mandatoryGross;
           totalIncomeTaxThisYear += mandatoryTax;
-          netGovIncome += mandatoryGross - mandatoryTax;
+          netAvailableIncome += mandatoryGross - mandatoryTax;
         }
       }
 
-      netNeeded = Math.max(0, targetSpending - netGovIncome);
+      netNeeded = Math.max(0, targetSpending - netAvailableIncome);
+
+      if (isWorkingYear && netNeeded <= 0) {
+        let surplus = Math.max(0, netAvailableIncome - targetSpending);
+        const tfsaRoom = TFSA_ANNUAL_ROOM_BASE * inflationFactor;
+        const rrspRoom = Math.min(
+          employmentIncomeGross * 0.18,
+          RRSP_ANNUAL_MAX_BASE * inflationFactor,
+        );
+
+        const contribTFSA = Math.min(surplus, tfsaRoom);
+        tfsa += contribTFSA;
+        surplus -= contribTFSA;
+
+        const contribRRSP = Math.min(surplus, rrspRoom);
+        rrsp += contribRRSP;
+        surplus -= contribRRSP;
+
+        const contribNonReg = Math.max(0, surplus);
+        nonreg += contribNonReg;
+        currentAcb += contribNonReg;
+      }
 
       const executeDraw = (accountType, targetNet) => {
         if (targetNet <= 0 || netNeeded <= 0) return;

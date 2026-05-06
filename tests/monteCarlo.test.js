@@ -4,6 +4,7 @@ import { runMonteCarlo } from "../src/core/monteCarlo.js";
 function baseParams(overrides = {}) {
   return {
     age: 65,
+    retirementAge: 65,
     rrspStart: 450000,
     tfsaStart: 180000,
     nonregStart: 90000,
@@ -20,6 +21,7 @@ function baseParams(overrides = {}) {
     enforceRrifMin: true,
     strategy: "tfsa-rrsp-nonreg",
     projectionAge: 92,
+    grossEmploymentIncome: 0,
     trials: 120,
     volatility: 0.12,
     inflationVolatility: 0.01,
@@ -161,5 +163,23 @@ describe("runMonteCarlo", () => {
     );
 
     expect(withCut).not.toEqual(noCut);
+  });
+
+  it("runs with working years and surplus contributions", async () => {
+    const res = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 65,
+        projectionAge: 70,
+        grossEmploymentIncome: 100000,
+        baseSpending: 10000,
+        seed: 889,
+        trials: 40,
+      }),
+    );
+
+    expect(res.trials).toBe(40);
+    expect(res.successRate).toBeGreaterThanOrEqual(0);
+    expect(res.successRate).toBeLessThanOrEqual(1);
   });
 });

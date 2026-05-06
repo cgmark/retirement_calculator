@@ -32,11 +32,13 @@ document.addEventListener("DOMContentLoaded", () => {
     "displayMode",
     "debugMode",
     "age",
+    "retirementAge",
     "spending",
     "spendingMode",
     "targetSuccess",
     "solvePrecision",
     "lifeExpectancy",
+    "grossEmploymentIncome",
     "inflation",
     "growth",
     "province",
@@ -704,6 +706,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = document.getElementById("spendingMode").value;
     const targetEl = document.getElementById("targetSuccessGroup");
     const precisionEl = document.getElementById("solvePrecisionGroup");
+    const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
     const scheduleStatus = document.getElementById("spendingScheduleStatus");
@@ -722,8 +725,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (targetEl) targetEl.style.display = visible ? "block" : "none";
     if (precisionEl) precisionEl.style.display = visible ? "block" : "none";
+    if (scheduleGroup) scheduleGroup.style.display = visible ? "none" : "block";
     if (scheduleWrap) scheduleWrap.style.display = visible ? "none" : "block";
-    if (scheduleNote) scheduleNote.style.display = visible ? "block" : "none";
+    if (scheduleNote) scheduleNote.style.display = "none";
     if (scheduleStatus)
       scheduleStatus.style.display = visible ? "none" : "block";
     if (spendingInput) {

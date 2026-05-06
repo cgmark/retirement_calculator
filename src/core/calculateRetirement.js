@@ -16,6 +16,7 @@ export async function runRetirementCalculation(params) {
 
   let {
     age,
+    retirementAge,
     rrsp,
     tfsa,
     nonreg,
@@ -26,6 +27,7 @@ export async function runRetirementCalculation(params) {
     targetSuccessRate,
     solvePrecision,
     lifeExpectancy,
+    grossEmploymentIncome,
     inflation,
     growth,
     provCode,
@@ -59,6 +61,7 @@ export async function runRetirementCalculation(params) {
         baselineSpend: baseSpending,
         monteCarloParams: {
           age,
+          retirementAge,
           rrspStart: rrsp,
           tfsaStart: tfsa,
           nonregStart: nonreg,
@@ -75,6 +78,7 @@ export async function runRetirementCalculation(params) {
           enforceRrifMin,
           strategy,
           projectionAge: lifeExpectancy,
+          grossEmploymentIncome,
           trials: mcTrials,
           volatility: mcVolatility,
           inflationVolatility: mcInflationVolatility,
@@ -100,6 +104,7 @@ export async function runRetirementCalculation(params) {
   // Deterministic baseline path is always computed (also used for charts/tables).
   const { results } = await runDeterministicProjection({
     age,
+    retirementAge,
     rrspStart: rrsp,
     tfsaStart: tfsa,
     nonregStart: nonreg,
@@ -107,6 +112,7 @@ export async function runRetirementCalculation(params) {
     baseSpending,
     activeSchedule,
     lifeExpectancy,
+    grossEmploymentIncome,
     inflation,
     growth,
     provCode,
@@ -127,6 +133,7 @@ export async function runRetirementCalculation(params) {
     if (typeof onMonteCarloStart === "function") onMonteCarloStart(mcTrials);
     monteCarloResults = await runMonteCarlo({
       age,
+      retirementAge,
       rrspStart: rrsp,
       tfsaStart: tfsa,
       nonregStart: nonreg,
@@ -143,6 +150,7 @@ export async function runRetirementCalculation(params) {
       enforceRrifMin,
       strategy: effectiveStrategy,
       projectionAge: lifeExpectancy,
+      grossEmploymentIncome,
       trials: mcTrials,
       volatility: mcVolatility,
       inflationVolatility: mcInflationVolatility,
