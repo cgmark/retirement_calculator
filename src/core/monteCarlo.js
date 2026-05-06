@@ -225,15 +225,18 @@ export async function runMonteCarlo(params) {
           strategy === "rrsp-meltdown" ||
           strategy === "rrsp-meltdown-plus10" ||
           strategy === "rrsp-meltdown-plus20" ||
+          strategy === "rrsp-meltdown-plus50" ||
           strategy === "rrsp-meltdown-tfsa-transfer" ||
           strategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa"
         ) {
           const overshootPct =
-            strategy === "rrsp-meltdown-plus20"
-              ? 0.2
-              : strategy === "rrsp-meltdown-plus10"
-                ? 0.1
-                : 0;
+            strategy === "rrsp-meltdown-plus50"
+              ? 0.5
+              : strategy === "rrsp-meltdown-plus20"
+                ? 0.2
+                : strategy === "rrsp-meltdown-plus10"
+                  ? 0.1
+                  : 0;
           applyEarlyRetirementDraw({
             getBalances: () => ({ rrsp, tfsa, nonreg }),
             getNetNeeded: () => netNeeded,

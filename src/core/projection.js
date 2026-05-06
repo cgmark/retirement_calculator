@@ -177,15 +177,18 @@ export async function runDeterministicProjection(params) {
         effectiveStrategy === "rrsp-meltdown" ||
         effectiveStrategy === "rrsp-meltdown-plus10" ||
         effectiveStrategy === "rrsp-meltdown-plus20" ||
+        effectiveStrategy === "rrsp-meltdown-plus50" ||
         effectiveStrategy === "rrsp-meltdown-tfsa-transfer" ||
         effectiveStrategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa"
       ) {
         const overshootPct =
-          effectiveStrategy === "rrsp-meltdown-plus20"
-            ? 0.2
-            : effectiveStrategy === "rrsp-meltdown-plus10"
-              ? 0.1
-              : 0;
+          effectiveStrategy === "rrsp-meltdown-plus50"
+            ? 0.5
+            : effectiveStrategy === "rrsp-meltdown-plus20"
+              ? 0.2
+              : effectiveStrategy === "rrsp-meltdown-plus10"
+                ? 0.1
+                : 0;
         applyEarlyRetirementDraw({
           getBalances: () => ({ rrsp, tfsa, nonreg }),
           getNetNeeded: () => netNeeded,
@@ -226,6 +229,7 @@ export async function runDeterministicProjection(params) {
       effectiveStrategy !== "rrsp-meltdown" &&
       effectiveStrategy !== "rrsp-meltdown-plus10" &&
       effectiveStrategy !== "rrsp-meltdown-plus20" &&
+      effectiveStrategy !== "rrsp-meltdown-plus50" &&
       effectiveStrategy !== "rrsp-meltdown-tfsa-transfer" &&
       effectiveStrategy !== "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa" &&
       netNeeded > 0.01

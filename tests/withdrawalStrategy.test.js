@@ -138,6 +138,44 @@ describe("withdrawal strategy helpers", () => {
     expect(plusRrspTarget).toBeGreaterThan(baseRrspTarget);
   });
 
+  it("rrsp-meltdown +50% requests more RRSP headroom than +20", () => {
+    const plus20Calls = [];
+    const plus50Calls = [];
+
+    const setupRunner = (calls, overshootPct) => {
+      let netNeeded = 20000;
+      let taxableIncome = 50000;
+      const balances = { rrsp: 100000, tfsa: 100000, nonreg: 100000 };
+      const executeDraw = (acc, targetNet) => {
+        calls.push([acc, targetNet]);
+        const used = Math.min(netNeeded, targetNet);
+        if (acc === "rrsp") taxableIncome += used;
+        if (acc === "rrsp") balances.rrsp -= used;
+        if (acc === "nonreg") balances.nonreg -= used;
+        if (acc === "tfsa") balances.tfsa -= used;
+        netNeeded = Math.max(0, netNeeded - used);
+      };
+
+      applyEarlyRetirementDraw({
+        getBalances: () => balances,
+        getNetNeeded: () => netNeeded,
+        getCurrentTaxableIncome: () => taxableIncome,
+        getGrossOAS: () => 0,
+        executeDraw,
+        provCode: "ON",
+        inflationFactor: 1,
+        overshootPct,
+      });
+    };
+
+    setupRunner(plus20Calls, 0.2);
+    setupRunner(plus50Calls, 0.5);
+
+    const plus20Target = plus20Calls.find((c) => c[0] === "rrsp")?.[1] ?? 0;
+    const plus50Target = plus50Calls.find((c) => c[0] === "rrsp")?.[1] ?? 0;
+    expect(plus50Target).toBeGreaterThan(plus20Target);
+  });
+
   it("rrsp-meltdown TFSA transfer moves RRSP draw into TFSA and backfills from nonreg", () => {
     let netNeeded = 12000;
     let taxableIncome = 50000;
