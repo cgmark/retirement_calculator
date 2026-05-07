@@ -180,9 +180,28 @@ export async function runMonteCarlo(params) {
         tfsa += contribTFSA;
         surplus -= contribTFSA;
 
-        const contribRRSP = Math.min(surplus, rrspRoom);
-        rrsp += contribRRSP;
-        surplus -= contribRRSP;
+        let remainingRrspRoom = rrspRoom;
+        while (surplus > 0.01 && remainingRrspRoom > 0.01) {
+          const rrspContribution = Math.min(surplus, remainingRrspRoom);
+          const reducedTaxableIncome = Math.max(
+            0,
+            currentTaxableIncome - rrspContribution,
+          );
+          const reducedTax = calculateTax(
+            reducedTaxableIncome,
+            provCode,
+            inflationFactor,
+          );
+          const refund = Math.max(0, totalIncomeTaxThisYear - reducedTax);
+
+          rrsp += rrspContribution;
+          surplus = surplus - rrspContribution + refund;
+          remainingRrspRoom -= rrspContribution;
+          currentTaxableIncome = reducedTaxableIncome;
+          totalIncomeTaxThisYear = reducedTax;
+
+          if (refund <= 0.01) break;
+        }
 
         const contribNonReg = Math.max(0, surplus);
         nonreg += contribNonReg;

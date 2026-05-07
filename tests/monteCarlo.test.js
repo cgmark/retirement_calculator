@@ -182,4 +182,31 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
+
+  it("reinvests RRSP tax refunds into same-year savings", async () => {
+    const res = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 65,
+        rrspStart: 0,
+        tfsaStart: 0,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 60,
+        grossEmploymentIncome: 100000,
+        baseSpending: 10000,
+        trials: 1,
+        growth: 0,
+        inflation: 0,
+        volatility: 0,
+        inflationVolatility: 0,
+        seed: 890,
+      }),
+    );
+
+    expect(res.trials).toBe(1);
+    expect(res.avgTax).toBeCloseTo(16149.1295, 6);
+    expect(res.avgTax).toBeLessThan(21706.0424);
+    expect(res.medianFinalEstate).toBeCloseTo(73850.8705, 6);
+  });
 });

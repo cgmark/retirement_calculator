@@ -47,6 +47,22 @@ describe("solveSustainableSpending", () => {
     expect(solved).toBeNull();
   });
 
+  it("returns null when target success is impossible even at zero spending", async () => {
+    const runMonteCarlo = async () => ({ successRate: 0.1 });
+
+    const solved = await solveSustainableSpending({
+      targetSuccessRate: 0.9,
+      precision: 100,
+      maxIterations: 10,
+      baselineSpend: 60000,
+      monteCarloParams: { trials: 500 },
+      runMonteCarlo,
+      formatCurrency: (n) => `$${Math.round(n)}`,
+    });
+
+    expect(solved).toBeNull();
+  });
+
   it("meets target success on a seeded real Monte Carlo run", async () => {
     const monteCarloParams = {
       age: 65,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runDeterministicProjection } from "../src/core/projection.js";
+import { calculateTax } from "../src/core/tax.js";
 
 describe("runDeterministicProjection", () => {
   it("contributes surplus in TFSA, RRSP, then non-reg order during working years", async () => {
@@ -31,7 +32,10 @@ describe("runDeterministicProjection", () => {
     expect(results[0].drawNonReg).toBe(0);
     expect(results[0].contribTFSA).toBeCloseTo(7000, 6);
     expect(results[0].contribRRSP).toBeCloseTo(18000, 6);
-    expect(results[0].contribNonReg).toBeGreaterThan(0);
+    expect(results[0].contribNonReg).toBeCloseTo(48850.8705, 6);
     expect(results[0].employmentIncomeGross).toBeCloseTo(100000, 6);
+    expect(results[0].taxableIncome).toBeCloseTo(82000, 6);
+    expect(results[0].incomeTax).toBeLessThan(calculateTax(100000, "ON", 1));
+    expect(results[0].total).toBeCloseTo(73850.8705, 6);
   });
 });

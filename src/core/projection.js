@@ -132,9 +132,34 @@ export async function runDeterministicProjection(params) {
       tfsa += contribTFSA;
       surplus -= contribTFSA;
 
-      contribRRSP = Math.min(surplus, rrspRoom);
-      rrsp += contribRRSP;
-      surplus -= contribRRSP;
+      let remainingRrspRoom = rrspRoom;
+      while (surplus > 0.01 && remainingRrspRoom > 0.01) {
+        const rrspContribution = Math.min(surplus, remainingRrspRoom);
+        const reducedTaxableIncome = Math.max(
+          0,
+          currentTaxableIncome - rrspContribution,
+        );
+        const reducedTax = calculateTax(
+          reducedTaxableIncome,
+          provCode,
+          inflationFactor,
+        );
+        const refund = Math.max(0, totalIncomeTaxThisYear - reducedTax);
+
+        contribRRSP += rrspContribution;
+        rrsp += rrspContribution;
+        surplus = surplus - rrspContribution + refund;
+        remainingRrspRoom -= rrspContribution;
+        currentTaxableIncome = reducedTaxableIncome;
+        totalIncomeTaxThisYear = reducedTax;
+
+        if (refund <= 0.01) break;
+      }
+
+      employmentIncomeNet = Math.max(
+        0,
+        currentTaxableIncome - totalIncomeTaxThisYear - (grossCPP + grossOAS),
+      );
 
       contribNonReg = Math.max(0, surplus);
       nonreg += contribNonReg;
