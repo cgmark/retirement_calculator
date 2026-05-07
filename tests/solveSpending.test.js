@@ -47,7 +47,7 @@ describe("solveSustainableSpending", () => {
     expect(solved).toBeNull();
   });
 
-  it("returns null when target success is impossible even at zero spending", async () => {
+  it("returns NaN when target success is impossible even at zero spending", async () => {
     const runMonteCarlo = async () => ({ successRate: 0.1 });
 
     const solved = await solveSustainableSpending({
@@ -60,7 +60,7 @@ describe("solveSustainableSpending", () => {
       formatCurrency: (n) => `$${Math.round(n)}`,
     });
 
-    expect(solved).toBeNull();
+    expect(Number.isNaN(solved)).toBe(true);
   });
 
   it("meets target success on a seeded real Monte Carlo run", async () => {

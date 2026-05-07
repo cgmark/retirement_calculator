@@ -375,9 +375,10 @@ export async function runDeterministicProjection(params) {
 
     if (isDepleted) break;
 
-    rrsp *= 1 + growth;
-    tfsa *= 1 + growth;
-    nonreg *= 1 + growth;
+    const yearlyGrowth = Math.max(-0.95, growth);
+    rrsp *= 1 + yearlyGrowth;
+    tfsa *= 1 + yearlyGrowth;
+    nonreg *= 1 + yearlyGrowth;
   }
 
   return { results, effectiveStrategy };

@@ -33,7 +33,7 @@ export async function solveSustainableSpending(params) {
     );
   }
   if (typeof shouldCancel === "function" && shouldCancel()) return null;
-  if (lowResult.successRate < targetSuccessRate) return null;
+  if (lowResult.successRate < targetSuccessRate) return Number.NaN;
 
   for (let expand = 0; expand < 8; expand++) {
     const res = await runMonteCarlo({

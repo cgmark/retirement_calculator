@@ -1,70 +1,129 @@
+export const SCENARIO_INPUT_DEFAULTS = {
+  age: 60,
+  retirementAge: null,
+  rrsp: 0,
+  tfsa: 0,
+  nonreg: 0,
+  baseSpending: 60000,
+  targetSuccessPct: 90,
+  solvePrecision: 100,
+  lifeExpectancy: 100,
+  grossEmploymentIncome: 0,
+  inflationPct: 2.5,
+  growthPct: 5.5,
+  cppScenarioAge: 65,
+  cppMonthly: 0,
+  oasPercent: 100,
+  rrifStartAge: 72,
+  mcTrials: 1000,
+  mcVolatilityPct: 0,
+  mcInflationVolatilityPct: 0,
+  mcBadYearSpendCutPct: 0,
+};
+
 export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   // Keep all DOM parsing/clamping in one place so core modules stay UI-agnostic.
-  const age = parseInt(doc.getElementById("age").value);
-  const retirementAge = parseInt(doc.getElementById("retirementAge").value);
-  const rrsp = parseFloat(doc.getElementById("rrsp").value);
-  const tfsa = parseFloat(doc.getElementById("tfsa").value);
-  const nonreg = parseFloat(doc.getElementById("nonreg").value);
-  let currentAcb = parseFloat(doc.getElementById("nonregAcb").value);
+  const readInt = (id, fallback) => {
+    const value = parseInt(doc.getElementById(id).value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const readFloat = (id, fallback) => {
+    const value = parseFloat(doc.getElementById(id).value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const age = readInt("age", SCENARIO_INPUT_DEFAULTS.age);
+  const retirementAge = readInt("retirementAge", age);
+  const rrsp = Math.max(0, readFloat("rrsp", SCENARIO_INPUT_DEFAULTS.rrsp));
+  const tfsa = Math.max(0, readFloat("tfsa", SCENARIO_INPUT_DEFAULTS.tfsa));
+  const nonreg = Math.max(
+    0,
+    readFloat("nonreg", SCENARIO_INPUT_DEFAULTS.nonreg),
+  );
+  let currentAcb = Math.max(0, readFloat("nonregAcb", nonreg));
 
   if (currentAcb > nonreg) currentAcb = nonreg;
 
-  const baseSpending = parseFloat(doc.getElementById("spending").value);
+  const baseSpending = Math.max(
+    0,
+    readFloat("spending", SCENARIO_INPUT_DEFAULTS.baseSpending),
+  );
   const spendingSchedule = getValidatedSpendingSchedule();
   const spendingMode = doc.getElementById("spendingMode").value;
   const targetSuccessRate = Math.max(
     0.5,
     Math.min(
       0.99,
-      (parseFloat(doc.getElementById("targetSuccess").value) || 90) / 100,
+      readFloat("targetSuccess", SCENARIO_INPUT_DEFAULTS.targetSuccessPct) /
+        100,
     ),
   );
   const solvePrecision = Math.max(
     10,
-    parseFloat(doc.getElementById("solvePrecision").value) || 100,
+    readFloat("solvePrecision", SCENARIO_INPUT_DEFAULTS.solvePrecision),
   );
   const lifeExpectancy = Math.max(
     age,
-    Math.min(120, parseInt(doc.getElementById("lifeExpectancy").value) || 100),
+    Math.min(
+      120,
+      readInt("lifeExpectancy", SCENARIO_INPUT_DEFAULTS.lifeExpectancy),
+    ),
   );
   const grossEmploymentIncome = Math.max(
     0,
-    parseFloat(doc.getElementById("grossEmploymentIncome").value) || 0,
+    readFloat(
+      "grossEmploymentIncome",
+      SCENARIO_INPUT_DEFAULTS.grossEmploymentIncome,
+    ),
   );
-  const inflation = parseFloat(doc.getElementById("inflation").value) / 100;
-  const growth = parseFloat(doc.getElementById("growth").value) / 100;
+  const inflation =
+    readFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
+  const growth = readFloat("growth", SCENARIO_INPUT_DEFAULTS.growthPct) / 100;
   const provCode = doc.getElementById("province").value;
 
-  const cppScenarioAge = parseInt(doc.getElementById("cppScenario").value);
+  const cppScenarioAge = readInt(
+    "cppScenario",
+    SCENARIO_INPUT_DEFAULTS.cppScenarioAge,
+  );
   const selectedCPPMonthly =
     cppScenarioAge === 60
-      ? parseFloat(doc.getElementById("cpp60").value)
+      ? readFloat("cpp60", SCENARIO_INPUT_DEFAULTS.cppMonthly)
       : cppScenarioAge === 70
-        ? parseFloat(doc.getElementById("cpp70").value)
-        : parseFloat(doc.getElementById("cpp65").value);
+        ? readFloat("cpp70", SCENARIO_INPUT_DEFAULTS.cppMonthly)
+        : readFloat("cpp65", SCENARIO_INPUT_DEFAULTS.cppMonthly);
 
-  const oasPercent = parseFloat(doc.getElementById("oasPercent").value) / 100;
-  const rrifStartAge = parseInt(doc.getElementById("rrifStartAge").value);
+  const oasPercent =
+    readFloat("oasPercent", SCENARIO_INPUT_DEFAULTS.oasPercent) / 100;
+  const rrifStartAge = readInt(
+    "rrifStartAge",
+    SCENARIO_INPUT_DEFAULTS.rrifStartAge,
+  );
   const enforceRrifMin = doc.getElementById("enforceRrifMin").value === "yes";
   const strategy = doc.getElementById("strategy").value;
   const enableMonteCarlo = doc.getElementById("enableMonteCarlo").checked;
   const mcTrials = Math.max(
     100,
-    Math.min(10000, parseInt(doc.getElementById("mcTrials").value) || 1000),
+    Math.min(10000, readInt("mcTrials", SCENARIO_INPUT_DEFAULTS.mcTrials)),
   );
   const mcVolatility = Math.max(
     0,
-    parseFloat(doc.getElementById("mcVolatility").value) / 100 || 0,
+    readFloat("mcVolatility", SCENARIO_INPUT_DEFAULTS.mcVolatilityPct) / 100,
   );
   const mcInflationVolatility = Math.max(
     0,
-    parseFloat(doc.getElementById("mcInflationVolatility").value) / 100 || 0,
+    readFloat(
+      "mcInflationVolatility",
+      SCENARIO_INPUT_DEFAULTS.mcInflationVolatilityPct,
+    ) / 100,
   );
   const mcBadYearSpendCutPct = Math.max(
     0,
     Math.min(
       1,
-      parseFloat(doc.getElementById("mcBadYearSpendCut").value) / 100 || 0,
+      readFloat(
+        "mcBadYearSpendCut",
+        SCENARIO_INPUT_DEFAULTS.mcBadYearSpendCutPct,
+      ) / 100,
     ),
   );
   const mcSeedRaw = doc.getElementById("mcSeed").value;
