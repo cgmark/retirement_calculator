@@ -74,26 +74,26 @@ describe("runMonteCarlo", () => {
     expect(res.trials).toBeLessThan(res.requestedTrials);
   });
 
-  it("runs with rrsp-meltdown strategy", async () => {
+  it("runs with rrsp-fill-low-bracket strategy", async () => {
     const res = await runMonteCarlo(
-      baseParams({ strategy: "rrsp-meltdown", seed: 777, trials: 80 }),
+      baseParams({ strategy: "rrsp-fill-low-bracket", seed: 777, trials: 80 }),
     );
     expect(res.trials).toBe(80);
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("runs with rrsp-meltdown +10% and +20% strategies", async () => {
+  it("runs with rrsp-fill-low-bracket +10% and +20% strategies", async () => {
     const plus10 = await runMonteCarlo(
       baseParams({
-        strategy: "rrsp-meltdown-plus10",
+        strategy: "rrsp-fill-low-bracket-plus10",
         seed: 778,
         trials: 60,
       }),
     );
     const plus20 = await runMonteCarlo(
       baseParams({
-        strategy: "rrsp-meltdown-plus20",
+        strategy: "rrsp-fill-low-bracket-plus20",
         seed: 779,
         trials: 60,
       }),
@@ -103,10 +103,10 @@ describe("runMonteCarlo", () => {
     expect(plus20.trials).toBe(60);
   });
 
-  it("runs with rrsp-meltdown +50% strategy", async () => {
+  it("runs with rrsp-fill-low-bracket +50% strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
-        strategy: "rrsp-meltdown-plus50",
+        strategy: "rrsp-fill-low-bracket-plus50",
         seed: 785,
         trials: 60,
       }),
@@ -116,10 +116,10 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("runs with rrsp-meltdown TFSA transfer strategy", async () => {
+  it("runs with rrsp-fill-low-bracket TFSA transfer strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
-        strategy: "rrsp-meltdown-tfsa-transfer",
+        strategy: "rrsp-fill-low-bracket-tfsa-transfer",
         seed: 780,
         trials: 60,
       }),
@@ -130,10 +130,10 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("runs with rrsp-meltdown TFSA transfer opportunistic TFSA strategy", async () => {
+  it("runs with rrsp-fill-low-bracket TFSA transfer opportunistic TFSA strategy", async () => {
     const res = await runMonteCarlo(
       baseParams({
-        strategy: "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
+        strategy: "rrsp-fill-low-bracket-tfsa-transfer-opportunistic-tfsa",
         seed: 781,
         trials: 60,
       }),

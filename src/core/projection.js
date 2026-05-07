@@ -9,7 +9,10 @@ import { getBaseSpendingForAge } from "./spending.js";
 import {
   applyProportionalDraw,
   applySequenceDraw,
-  applyEarlyRetirementDraw,
+  applyRrspMeltdownDraw,
+  getRrspMeltdownOptions,
+  isRrspMeltdownStrategy,
+  isSequenceStrategy,
 } from "./withdrawalStrategy.js";
 
 export async function runDeterministicProjection(params) {
@@ -241,23 +244,9 @@ export async function runDeterministicProjection(params) {
           getNetNeeded: () => netNeeded,
           executeDraw,
         });
-      } else if (
-        effectiveStrategy === "rrsp-meltdown" ||
-        effectiveStrategy === "rrsp-meltdown-plus10" ||
-        effectiveStrategy === "rrsp-meltdown-plus20" ||
-        effectiveStrategy === "rrsp-meltdown-plus50" ||
-        effectiveStrategy === "rrsp-meltdown-tfsa-transfer" ||
-        effectiveStrategy === "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa"
-      ) {
-        const overshootPct =
-          effectiveStrategy === "rrsp-meltdown-plus50"
-            ? 0.5
-            : effectiveStrategy === "rrsp-meltdown-plus20"
-              ? 0.2
-              : effectiveStrategy === "rrsp-meltdown-plus10"
-                ? 0.1
-                : 0;
-        applyEarlyRetirementDraw({
+      } else if (isRrspMeltdownStrategy(effectiveStrategy)) {
+        const meltdownOptions = getRrspMeltdownOptions(effectiveStrategy);
+        applyRrspMeltdownDraw({
           getBalances: () => ({ rrsp, tfsa, nonreg }),
           getNetNeeded: () => netNeeded,
           getCurrentTaxableIncome: () => currentTaxableIncome,
@@ -266,21 +255,14 @@ export async function runDeterministicProjection(params) {
           executeDraw,
           provCode,
           inflationFactor,
-          overshootPct,
-          enableTfsaTransfer:
-            effectiveStrategy === "rrsp-meltdown-tfsa-transfer" ||
-            effectiveStrategy ===
-              "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
-          opportunisticTfsa:
-            effectiveStrategy ===
-            "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa",
+          ...meltdownOptions,
           onTfsaTransfer: (transferAmount) => {
             tfsa += transferAmount;
             netNeeded += transferAmount;
             executeDraw("nonreg", transferAmount);
           },
         });
-      } else {
+      } else if (isSequenceStrategy(effectiveStrategy)) {
         applySequenceDraw({
           strategy: effectiveStrategy,
           targetNet,
@@ -294,12 +276,8 @@ export async function runDeterministicProjection(params) {
 
     if (
       effectiveStrategy !== "proportional" &&
-      effectiveStrategy !== "rrsp-meltdown" &&
-      effectiveStrategy !== "rrsp-meltdown-plus10" &&
-      effectiveStrategy !== "rrsp-meltdown-plus20" &&
-      effectiveStrategy !== "rrsp-meltdown-plus50" &&
-      effectiveStrategy !== "rrsp-meltdown-tfsa-transfer" &&
-      effectiveStrategy !== "rrsp-meltdown-tfsa-transfer-opportunistic-tfsa" &&
+      !isRrspMeltdownStrategy(effectiveStrategy) &&
+      isSequenceStrategy(effectiveStrategy) &&
       netNeeded > 0.01
     ) {
       applySequenceDraw({
