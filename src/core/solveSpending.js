@@ -22,6 +22,19 @@ export async function solveSustainableSpending(params) {
     Math.min(400, Math.round((monteCarloParams.trials || 500) * 0.5)),
   );
 
+  const lowResult = await runMonteCarlo({
+    ...monteCarloParams,
+    trials: testTrials,
+    baseSpending: low,
+  });
+  if (typeof onIteration === "function") {
+    onIteration(
+      `Feasibility check at ${formatCurrency(low)} (${(lowResult.successRate * 100).toFixed(1)}%)`,
+    );
+  }
+  if (typeof shouldCancel === "function" && shouldCancel()) return null;
+  if (lowResult.successRate < targetSuccessRate) return null;
+
   for (let expand = 0; expand < 8; expand++) {
     const res = await runMonteCarlo({
       ...monteCarloParams,
