@@ -209,4 +209,45 @@ describe("runMonteCarlo", () => {
     expect(res.avgTax).toBeLessThan(21706.0424);
     expect(res.medianFinalEstate).toBeCloseTo(73850.8705, 6);
   });
+
+  it("clamps ACB down to non-registered balance", async () => {
+    const oversizedAcb = await runMonteCarlo(
+      baseParams({
+        rrspStart: 0,
+        tfsaStart: 0,
+        nonregStart: 100000,
+        acbStart: 150000,
+        baseSpending: 50000,
+        selectedCPPMonthly: 0,
+        oasPercent: 0,
+        projectionAge: 65,
+        trials: 1,
+        growth: 0,
+        inflation: 0,
+        volatility: 0,
+        inflationVolatility: 0,
+        seed: 891,
+      }),
+    );
+    const clampedAcb = await runMonteCarlo(
+      baseParams({
+        rrspStart: 0,
+        tfsaStart: 0,
+        nonregStart: 100000,
+        acbStart: 100000,
+        baseSpending: 50000,
+        selectedCPPMonthly: 0,
+        oasPercent: 0,
+        projectionAge: 65,
+        trials: 1,
+        growth: 0,
+        inflation: 0,
+        volatility: 0,
+        inflationVolatility: 0,
+        seed: 891,
+      }),
+    );
+
+    expect(oversizedAcb).toEqual(clampedAcb);
+  });
 });

@@ -47,7 +47,7 @@ describe("solveSustainableSpending", () => {
     expect(solved).toBeNull();
   });
 
-  it("returns null when target success is impossible even at zero spending", async () => {
+  it("returns NaN when target success is impossible even at zero spending", async () => {
     const runMonteCarlo = async () => ({ successRate: 0.1 });
 
     const solved = await solveSustainableSpending({
@@ -60,7 +60,7 @@ describe("solveSustainableSpending", () => {
       formatCurrency: (n) => `$${Math.round(n)}`,
     });
 
-    expect(solved).toBeNull();
+    expect(Number.isNaN(solved)).toBe(true);
   });
 
   it("meets target success on a seeded real Monte Carlo run", async () => {
@@ -112,5 +112,25 @@ describe("solveSustainableSpending", () => {
       baseSpending: solved + precision,
     });
     expect(aboveSolved.successRate).toBeLessThanOrEqual(atSolved.successRate);
+  });
+
+  it("continues bracketing until it finds a failing upper bound", async () => {
+    const threshold = 5000000;
+
+    const solved = await solveSustainableSpending({
+      targetSuccessRate: 0.9,
+      precision: 1000,
+      maxIterations: 20,
+      baselineSpend: 60000,
+      monteCarloParams: { trials: 600 },
+      runMonteCarlo: async ({ baseSpending }) => ({
+        successRate: baseSpending <= threshold ? 0.95 : 0.1,
+      }),
+      formatCurrency: (n) => `$${Math.round(n)}`,
+    });
+
+    expect(solved).toBeGreaterThan(4000000);
+    expect(solved).toBeLessThanOrEqual(threshold);
+    expect(threshold - solved).toBeLessThanOrEqual(2000);
   });
 });

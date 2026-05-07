@@ -8,7 +8,7 @@ import {
 } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
 import { solveSustainableSpending } from "./core/solveSpending.js";
-import { readScenarioInputs } from "./core/inputs.js";
+import { readScenarioInputs, SCENARIO_INPUT_DEFAULTS } from "./core/inputs.js";
 import { runRetirementCalculation } from "./core/calculateRetirement.js";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -70,6 +70,62 @@ document.addEventListener("DOMContentLoaded", () => {
       maximumFractionDigits: 0,
     }).format(num);
   };
+
+  const readUiInt = (id, fallback) => {
+    const value = parseInt(document.getElementById(id)?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const readUiFloat = (id, fallback) => {
+    const value = parseFloat(document.getElementById(id)?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const setInputValueIfChanged = (id, nextValue) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const normalized = String(nextValue);
+    if (el.value !== normalized) el.value = normalized;
+  };
+
+  function syncInputsToForm(inputs) {
+    suppressInputChangeRecalc = true;
+    try {
+      setInputValueIfChanged("age", inputs.age);
+      setInputValueIfChanged("retirementAge", inputs.retirementAge);
+      setInputValueIfChanged("rrsp", inputs.rrsp);
+      setInputValueIfChanged("tfsa", inputs.tfsa);
+      setInputValueIfChanged("nonreg", inputs.nonreg);
+      setInputValueIfChanged("nonregAcb", inputs.currentAcb);
+      setInputValueIfChanged("spending", inputs.baseSpending);
+      setInputValueIfChanged("targetSuccess", inputs.targetSuccessRate * 100);
+      setInputValueIfChanged("solvePrecision", inputs.solvePrecision);
+      setInputValueIfChanged("lifeExpectancy", inputs.lifeExpectancy);
+      setInputValueIfChanged(
+        "grossEmploymentIncome",
+        inputs.grossEmploymentIncome,
+      );
+      setInputValueIfChanged("inflation", inputs.inflation * 100);
+      setInputValueIfChanged("growth", inputs.growth * 100);
+      setInputValueIfChanged("cpp60", readUiFloat("cpp60", 0));
+      setInputValueIfChanged("cpp65", readUiFloat("cpp65", 0));
+      setInputValueIfChanged("cpp70", readUiFloat("cpp70", 0));
+      setInputValueIfChanged("oasPercent", inputs.oasPercent * 100);
+      setInputValueIfChanged("rrifStartAge", inputs.rrifStartAge);
+      setInputValueIfChanged("mcTrials", inputs.mcTrials);
+      setInputValueIfChanged("mcVolatility", inputs.mcVolatility * 100);
+      setInputValueIfChanged(
+        "mcInflationVolatility",
+        inputs.mcInflationVolatility * 100,
+      );
+      setInputValueIfChanged(
+        "mcBadYearSpendCut",
+        inputs.mcBadYearSpendCutPct * 100,
+      );
+    } finally {
+      suppressInputChangeRecalc = false;
+    }
+  }
 
   function saveInputs() {
     try {
@@ -156,11 +212,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!Array.isArray(rows) || rows.length === 0) {
       // First run/default fallback: seed schedule from current headline inputs.
-      const currentAge = parseInt(document.getElementById("age").value) || 60;
-      const lifeExpectancy =
-        parseInt(document.getElementById("lifeExpectancy").value) || 100;
-      const spend =
-        parseFloat(document.getElementById("spending").value) || 60000;
+      const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
+      const lifeExpectancy = readUiInt(
+        "lifeExpectancy",
+        SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
+      );
+      const spend = readUiFloat(
+        "spending",
+        SCENARIO_INPUT_DEFAULTS.baseSpending,
+      );
       container.appendChild(
         createSpendingScheduleRow(currentAge, lifeExpectancy, spend),
       );
@@ -181,12 +241,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // This is the UI-facing wrapper around core schedule normalization/validation.
     // It translates validation outcomes into user-readable status text.
     const statusEl = document.getElementById("spendingScheduleStatus");
-    const currentAge = parseInt(document.getElementById("age").value) || 60;
+    const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
     const lifeExpectancy = Math.max(
       currentAge,
       Math.min(
         120,
-        parseInt(document.getElementById("lifeExpectancy").value) || 100,
+        readUiInt("lifeExpectancy", SCENARIO_INPUT_DEFAULTS.lifeExpectancy),
       ),
     );
     const rawRows = Array.from(
@@ -342,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
     card.style.display = "block";
     const displayInflated = document.getElementById("displayMode").checked;
     const baseInflation =
-      parseFloat(document.getElementById("inflation").value) / 100;
+      readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
     subtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? " (partial run)" : ""}. P10 means 10% of paths were below this level. Values shown in ${displayInflated ? "inflated/nominal" : "today's"} dollars.`;
 
     const labels = monteCarloResults.ageLabels;
@@ -457,18 +517,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     isRecalculating = true;
-    saveInputs();
     const runStatusEl = document.getElementById("runStatus");
     const runBtn = document.getElementById("calcBtn");
     const stopBtn = document.getElementById("stopBtn");
 
     try {
       const inputs = readScenarioInputs(document, getValidatedSpendingSchedule);
-      if (inputs.currentAcb > inputs.nonreg) {
-        // Mirror the ACB clamp back into the input so UI and model stay consistent.
-        const acbEl = document.getElementById("nonregAcb");
-        if (acbEl) acbEl.value = String(inputs.nonreg);
-      }
+      syncInputsToForm(inputs);
+      saveInputs();
 
       if (runBtn) {
         runBtn.disabled = false;
@@ -564,6 +620,10 @@ document.addEventListener("DOMContentLoaded", () => {
         runStatusEl.style.color = "#b45309";
         runStatusEl.innerText =
           "Enable Monte Carlo to solve sustainable spending.";
+      } else if (outcome.solveFailed && runStatusEl) {
+        runStatusEl.style.color = "#b45309";
+        runStatusEl.innerText =
+          "Could not solve sustainable spending: target success is unattainable even at $0 spend. Showing results for the current spend.";
       } else if (
         outcome.enableMonteCarlo &&
         outcome.runMonteCarloNow &&
@@ -750,17 +810,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function replaceWithFlatScheduleFromCurrentSpend(spendOverride = null) {
     const container = document.getElementById("spendingScheduleRows");
     if (!container) return;
-    const currentAge = parseInt(document.getElementById("age").value) || 60;
+    const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
     const lifeExpectancy = Math.max(
       currentAge,
       Math.min(
         120,
-        parseInt(document.getElementById("lifeExpectancy").value) || 100,
+        readUiInt("lifeExpectancy", SCENARIO_INPUT_DEFAULTS.lifeExpectancy),
       ),
     );
     const spend = Number.isFinite(spendOverride)
       ? spendOverride
-      : parseFloat(document.getElementById("spending").value) || 0;
+      : readUiFloat("spending", SCENARIO_INPUT_DEFAULTS.baseSpending);
     const flatRows = buildFlatSchedule(currentAge, lifeExpectancy, spend);
     container.innerHTML = "";
     flatRows.forEach((row) =>
@@ -782,9 +842,30 @@ document.addEventListener("DOMContentLoaded", () => {
     spendingMode,
   ) {
     // Presentation layer only: charts, table, summary cards, and explanatory copy.
+    if (!Array.isArray(results) || results.length === 0) {
+      const runStatusEl = document.getElementById("runStatus");
+      if (runStatusEl) {
+        runStatusEl.style.color = "#b45309";
+        runStatusEl.innerText =
+          "Unable to generate a projection from the current inputs. Missing numeric fields were reset to defaults.";
+      }
+      document.getElementById("tableBody").innerHTML = "";
+      document.getElementById("summaryGrid").innerHTML = "";
+      document.getElementById("mcSummary").style.display = "none";
+      document.getElementById("mcSummary").innerHTML = "";
+      renderMonteCarloOutcomeChart(null);
+      renderMonteCarloPercentileChart(null);
+      const debugEl = document.getElementById("debugSummary");
+      if (debugEl) {
+        debugEl.style.display = "none";
+        debugEl.innerHTML = "";
+      }
+      return;
+    }
+
     const displayInflated = document.getElementById("displayMode").checked;
     const inflation =
-      parseFloat(document.getElementById("inflation").value) / 100;
+      readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
 
     const adj = (val, idx) =>
       displayInflated ? val : val / Math.pow(1 + inflation, idx);
@@ -893,7 +974,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? `<span style="color:#b45309; font-weight:600;">Partial run: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials completed.</span>`
         : "";
       const solvedLine =
-        spendingMode === "solve" && solvedSpendOutput
+        spendingMode === "solve" && solvedSpendOutput !== null
           ? `Solved sustainable spend (today's dollars): ${formatCurrency(solvedSpendOutput)} at ${(targetSuccessRate * 100).toFixed(0)}% target success`
           : "";
       mcEl.innerHTML = [
@@ -1266,11 +1347,15 @@ document.addEventListener("DOMContentLoaded", () => {
   if (addSchedBtn) {
     addSchedBtn.addEventListener("click", () => {
       const lastRow = schedContainer.querySelector(".spending-row:last-child");
-      let nextStart = parseInt(document.getElementById("age").value) || 60;
-      const lifeExpectancy =
-        parseInt(document.getElementById("lifeExpectancy").value) || 100;
-      let nextAmount =
-        parseFloat(document.getElementById("spending").value) || 60000;
+      let nextStart = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
+      const lifeExpectancy = readUiInt(
+        "lifeExpectancy",
+        SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
+      );
+      let nextAmount = readUiFloat(
+        "spending",
+        SCENARIO_INPUT_DEFAULTS.baseSpending,
+      );
       if (lastRow) {
         const prevEnd = parseInt(lastRow.querySelector(".sched-end").value);
         const prevAmt = parseFloat(

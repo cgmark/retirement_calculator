@@ -47,6 +47,7 @@ export async function runRetirementCalculation(params) {
 
   let solvedSpendOutput = null;
   let shouldPromptEnableMcForSolve = false;
+  let solveFailed = false;
 
   // Optional pre-pass: solve for a flat spend that meets target MC success rate.
   if (spendingMode === "solve") {
@@ -91,7 +92,9 @@ export async function runRetirementCalculation(params) {
         onIteration: onSolveIteration,
         shouldCancel,
       });
-      if (solved !== null) {
+      if (Number.isNaN(solved)) {
+        solveFailed = true;
+      } else if (solved !== null) {
         baseSpending = solved;
         solvedSpendOutput = solved;
       }
@@ -181,6 +184,7 @@ export async function runRetirementCalculation(params) {
     monteCarloStale,
     monteCarloMeta,
     solvedSpendOutput,
+    solveFailed,
     baseSpending,
     shouldPromptEnableMcForSolve,
     targetSuccessRate,

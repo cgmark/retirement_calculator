@@ -91,7 +91,7 @@ export async function runMonteCarlo(params) {
     let rrsp = rrspStart;
     let tfsa = tfsaStart;
     let nonreg = nonregStart;
-    let currentAcb = acbStart;
+    let currentAcb = Math.min(acbStart, nonregStart);
     let depleted = false;
     let finalAge = age;
     let thisTax = 0;
