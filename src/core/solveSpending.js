@@ -21,6 +21,7 @@ export async function solveSustainableSpending(params) {
     150,
     Math.min(400, Math.round((monteCarloParams.trials || 500) * 0.5)),
   );
+  const maxBracketExpansions = 24;
 
   const lowResult = await runMonteCarlo({
     ...monteCarloParams,
@@ -35,7 +36,8 @@ export async function solveSustainableSpending(params) {
   if (typeof shouldCancel === "function" && shouldCancel()) return null;
   if (lowResult.successRate < targetSuccessRate) return Number.NaN;
 
-  for (let expand = 0; expand < 8; expand++) {
+  let foundFailingHigh = false;
+  for (let expand = 0; expand < maxBracketExpansions; expand++) {
     const res = await runMonteCarlo({
       ...monteCarloParams,
       trials: testTrials,
@@ -46,9 +48,14 @@ export async function solveSustainableSpending(params) {
         `Bracketing at ${formatCurrency(high)} (${(res.successRate * 100).toFixed(1)}%)`,
       );
     if (typeof shouldCancel === "function" && shouldCancel()) return null;
-    if (res.successRate < targetSuccessRate) break;
+    if (res.successRate < targetSuccessRate) {
+      foundFailingHigh = true;
+      break;
+    }
     high *= 1.5;
   }
+
+  if (!foundFailingHigh) return high;
 
   let best = low;
   for (let i = 0; i < maxIterations; i++) {

@@ -39,6 +39,7 @@ export async function runDeterministicProjection(params) {
   let tfsa = tfsaStart;
   let nonreg = nonregStart;
   let currentAcb = Math.min(acbStart, nonregStart);
+  const yearlyInflation = Math.max(-0.03, Math.min(0.2, inflation));
 
   const results = [];
   let isDepleted = false;
@@ -46,7 +47,7 @@ export async function runDeterministicProjection(params) {
   // Baseline projection is deterministic: fixed growth/inflation by year index.
   for (let i = 0; age + i <= lifeExpectancy; i++) {
     const currentAge = age + i;
-    const inflationFactor = Math.pow(1 + inflation, i);
+    const inflationFactor = Math.pow(1 + yearlyInflation, i);
     const ageBaseSpending = getBaseSpendingForAge(
       currentAge,
       baseSpending,

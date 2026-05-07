@@ -67,4 +67,34 @@ describe("runDeterministicProjection", () => {
     expect(results[1].total).toBeCloseTo(5, 6);
     expect(results[1].rrsp).toBeGreaterThanOrEqual(0);
   });
+
+  it("clamps deterministic inflation so spending never flips negative", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 1000000,
+      tfsaStart: 0,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 63,
+      grossEmploymentIncome: 0,
+      inflation: -1.5,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results).toHaveLength(4);
+    expect(results.map((r) => r.spending)).toEqual([
+      60000, 58200, 56454, 54760.38,
+    ]);
+    expect(results.every((r) => r.spending >= 0)).toBe(true);
+  });
 });
