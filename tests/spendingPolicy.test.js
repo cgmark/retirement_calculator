@@ -51,4 +51,19 @@ describe("spending policy helpers", () => {
 
     expect(target).toBeCloseTo(47431.33554394809, 6);
   });
+
+  it("applies schedule multipliers in rolling amortization mode", () => {
+    const target = getTargetSpendingForYear({
+      spendingMode: "rolling-amortization",
+      currentAge: 80,
+      projectionAge: 89,
+      baseSpending: 60000,
+      schedule: [{ startAge: 75, endAge: 89, amount: 80 }],
+      inflationFactor: 1,
+      totalPortfolio: 1000000,
+      amortizationRate: 0.03,
+    });
+
+    expect(target).toBeCloseTo(91052.82066420157, 6);
+  });
 });

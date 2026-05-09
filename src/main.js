@@ -4,7 +4,6 @@ import {
   sanitizeScheduleRows,
   normalizeScheduleRows,
   getScheduleValidationError,
-  buildFlatSchedule,
 } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
 import { solveSustainableSpending } from "./core/solveSpending.js";
@@ -176,13 +175,24 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="form-group" style="margin-bottom:0; display:flex; gap:6px; align-items:flex-end;">
                 <div style="flex:1;">
-                    <label>Net Spend/Yr</label>
+                    <label class="sched-amount-label">Net Spend/Yr</label>
                     <input type="number" class="sched-amount" min="0" value="${amount}">
                 </div>
                 <button type="button" class="remove-spending-row" title="Remove phase" aria-label="Remove phase" style="width:30px; min-width:30px; height:36px; margin-top:0; padding:0; font-size:1rem; line-height:1; display:flex; align-items:center; justify-content:center; background:#64748b;">×</button>
             </div>
         `;
     return row;
+  }
+
+  function updateSpendingScheduleLabels() {
+    const sectionLabel = document.getElementById("spendingScheduleLabel");
+    if (sectionLabel) {
+      sectionLabel.innerText = "Optional Age Adjustments (%)";
+    }
+
+    document.querySelectorAll(".sched-amount-label").forEach((label) => {
+      label.innerText = "Spend Adjustment (%)";
+    });
   }
 
   function saveSpendingSchedule() {
@@ -195,7 +205,7 @@ document.addEventListener("DOMContentLoaded", () => {
         amount: parseFloat(row.querySelector(".sched-amount").value),
       }));
       localStorage.setItem(
-        "retirePlanner_spendingSchedule",
+        "retirePlanner_ageAdjustments",
         JSON.stringify(rows),
       );
     } catch (e) {
@@ -206,10 +216,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function loadSpendingSchedule() {
     const container = document.getElementById("spendingScheduleRows");
     container.innerHTML = "";
+    updateSpendingScheduleLabels();
 
     let rows = null;
     try {
-      const raw = localStorage.getItem("retirePlanner_spendingSchedule");
+      const raw = localStorage.getItem("retirePlanner_ageAdjustments");
       if (raw) rows = JSON.parse(raw);
     } catch (e) {
       console.warn("Spending schedule load failed", e);
@@ -222,12 +233,8 @@ document.addEventListener("DOMContentLoaded", () => {
         "lifeExpectancy",
         SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
       );
-      const spend = readUiFloat(
-        "spending",
-        SCENARIO_INPUT_DEFAULTS.baseSpending,
-      );
       container.appendChild(
-        createSpendingScheduleRow(currentAge, lifeExpectancy, spend),
+        createSpendingScheduleRow(currentAge, lifeExpectancy, 100),
       );
       return;
     }
@@ -270,7 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cleaned.length === 0) {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "No valid schedule rows found. Using default Desired Net Spend/Yr.";
+        "No valid age adjustments found. Using 100% through all ages.";
       return [];
     }
 
@@ -278,13 +285,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (validationError === "invalid-range") {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "Each row needs Start Age <= End Age. Using default Desired Net Spend/Yr.";
+        "Each row needs Start Age <= End Age. Using 100% through all ages.";
       return [];
     }
     if (validationError === "overlap") {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "Spending schedule rows overlap. Using default Desired Net Spend/Yr.";
+        "Age adjustment rows overlap. Using 100% through all ages.";
       return [];
     }
 
@@ -305,7 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     statusEl.style.color = "#166534";
-    statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? "" : "s"} through age ${lifeExpectancy}.`;
+    statusEl.innerText = `Using ${cleaned.length} age adjustment phase${cleaned.length === 1 ? "" : "s"} through age ${lifeExpectancy}.`;
     return cleaned;
   }
 
@@ -940,7 +947,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggle = document.getElementById("spendingModeToggle");
     const isSolveMode = mode === "solve";
     const isRollingMode = mode === "rolling-amortization";
-    const usesManagedSpend = isSolveMode || isRollingMode;
 
     if (toggle) {
       toggle.querySelectorAll("button[data-mode]").forEach((btn) => {
@@ -954,13 +960,13 @@ document.addEventListener("DOMContentLoaded", () => {
       amortizationEl.style.display = isRollingMode ? "block" : "none";
     if (targetEstateEl)
       targetEstateEl.style.display = isRollingMode ? "block" : "none";
-    if (scheduleGroup)
-      scheduleGroup.style.display = usesManagedSpend ? "none" : "block";
+    if (scheduleGroup) scheduleGroup.style.display = "block";
     if (scheduleWrap)
-      scheduleWrap.style.display = usesManagedSpend ? "none" : "block";
-    if (scheduleNote) scheduleNote.style.display = "none";
+      scheduleWrap.style.display = isSolveMode ? "none" : "block";
+    if (scheduleNote)
+      scheduleNote.style.display = isSolveMode ? "block" : "none";
     if (scheduleStatus)
-      scheduleStatus.style.display = usesManagedSpend ? "none" : "block";
+      scheduleStatus.style.display = isSolveMode ? "none" : "block";
     if (spendingInputGroup)
       spendingInputGroup.style.display = isRollingMode ? "none" : "grid";
     if (firstYearSpendSummary)
@@ -984,30 +990,10 @@ document.addEventListener("DOMContentLoaded", () => {
         : isRollingMode
           ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value. Monte Carlo negative-return spending cuts are ignored in this mode."
           : "Uses your entered spend.";
-  }
-
-  function replaceWithFlatScheduleFromCurrentSpend(spendOverride = null) {
-    const container = document.getElementById("spendingScheduleRows");
-    if (!container) return;
-    const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
-    const lifeExpectancy = Math.max(
-      currentAge,
-      Math.min(
-        120,
-        readUiInt("lifeExpectancy", SCENARIO_INPUT_DEFAULTS.lifeExpectancy),
-      ),
-    );
-    const spend = Number.isFinite(spendOverride)
-      ? spendOverride
-      : readUiFloat("spending", SCENARIO_INPUT_DEFAULTS.baseSpending);
-    const flatRows = buildFlatSchedule(currentAge, lifeExpectancy, spend);
-    container.innerHTML = "";
-    flatRows.forEach((row) =>
-      container.appendChild(
-        createSpendingScheduleRow(row.startAge, row.endAge, row.amount),
-      ),
-    );
-    saveSpendingSchedule();
+    if (scheduleNote)
+      scheduleNote.innerText =
+        "Age adjustments are ignored in sustainable mode because the solver uses one flat annual spend.";
+    updateSpendingScheduleLabels();
   }
 
   function updateUI(
@@ -1506,15 +1492,7 @@ document.addEventListener("DOMContentLoaded", () => {
           Number.isFinite(solvedSpend) &&
           Math.round(desiredSpend) !== Math.round(solvedSpend)
         ) {
-          const applySolvedEverywhere = window.confirm(
-            "Your previous desired spend differs from the solved spend.\n\nDo you want to update BOTH Desired Net Spend/Yr and the spending schedule to the solved value for a like-for-like comparison?",
-          );
-          if (applySolvedEverywhere) {
-            spendEl.value = Math.round(solvedSpend);
-            replaceWithFlatScheduleFromCurrentSpend(solvedSpend);
-          } else {
-            spendEl.value = Math.round(desiredSpend);
-          }
+          spendEl.value = Math.round(desiredSpend);
         } else if (spendEl) {
           spendEl.value = Math.round(desiredSpend);
         }
@@ -1536,10 +1514,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "lifeExpectancy",
         SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
       );
-      let nextAmount = readUiFloat(
-        "spending",
-        SCENARIO_INPUT_DEFAULTS.baseSpending,
-      );
+      let nextAmount = 100;
       if (lastRow) {
         const prevEnd = parseInt(lastRow.querySelector(".sched-end").value);
         const prevAmt = parseFloat(
@@ -1589,15 +1564,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "enableMonteCarlo") updateMonteCarloSettingsVisibility();
         if (id === "spendingMode") updateSpendingModeVisibility();
 
-        if (id === "age" || id === "spending" || id === "lifeExpectancy") {
+        if (id === "age" || id === "lifeExpectancy") {
           const rows = document.querySelectorAll(
             "#spendingScheduleRows .spending-row",
           );
           if (rows.length === 1) {
             const r = rows[0];
             if (id === "age") r.querySelector(".sched-start").value = el.value;
-            if (id === "spending")
-              r.querySelector(".sched-amount").value = el.value;
             if (id === "lifeExpectancy")
               r.querySelector(".sched-end").value = el.value;
             saveSpendingSchedule();

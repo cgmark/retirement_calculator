@@ -1,4 +1,7 @@
-import { getBaseSpendingForAge } from "./spending.js";
+import {
+  getBaseSpendingForAge,
+  getScheduleMultiplierForAge,
+} from "./spending.js";
 
 export function calculateAmortizedPayment(
   principal,
@@ -40,13 +43,11 @@ export function getTargetSpendingForYear({
       remainingYears,
       realTargetEstate,
     );
-    return realSpend * inflationFactor;
+    const multiplier = getScheduleMultiplierForAge(currentAge, schedule);
+    return realSpend * inflationFactor * multiplier;
   }
 
-  const ageBaseSpending = getBaseSpendingForAge(
-    currentAge,
-    baseSpending,
-    schedule,
-  );
-  return ageBaseSpending * inflationFactor;
+  const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, []);
+  const multiplier = getScheduleMultiplierForAge(currentAge, schedule);
+  return ageBaseSpending * inflationFactor * multiplier;
 }

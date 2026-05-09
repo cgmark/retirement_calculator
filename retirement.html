@@ -533,8 +533,9 @@
                 style="margin-top: 6px"
               >
                 <label
-                  title="Set different spending targets for different age ranges. If an age is not covered, the default Desired Net Spend/Yr is used."
-                  >Optional Spending Schedule (today's dollars)</label
+                  id="spendingScheduleLabel"
+                  title="Set percentage-based spending adjustments for different age ranges. If an age is not covered, spending stays at 100% of the base amount for the current mode."
+                  >Optional Age Adjustments (%)</label
                 >
                 <div id="spendingScheduleContainer">
                   <div
@@ -546,7 +547,7 @@
                     id="addSpendingRow"
                     style="margin-top: 8px; padding: 8px; font-size: 0.9rem"
                   >
-                    Add Spending Phase
+                    Add Age Adjustment
                   </button>
                 </div>
                 <div
