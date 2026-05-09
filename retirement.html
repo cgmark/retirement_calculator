@@ -104,8 +104,13 @@
       }
       .spending-row {
         display: grid;
-        grid-template-columns: 90px 90px 1fr;
+        /* minmax(0, 1fr) prevents the last column from overflowing
+           when the amount input + remove button are constrained */
+        grid-template-columns: 90px 90px minmax(0, 1fr);
         gap: 8px;
+      }
+      .spending-row > .form-group {
+        min-width: 0;
       }
       .spending-row label {
         white-space: nowrap;

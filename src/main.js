@@ -174,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <input type="number" class="sched-end" min="0" max="120" value="${endAge}">
             </div>
             <div class="form-group" style="margin-bottom:0; display:flex; gap:6px; align-items:flex-end;">
-                <div style="flex:1;">
+                <div style="flex:1; min-width:0;">
                     <label class="sched-amount-label">Net Spend/Yr</label>
                     <input type="number" class="sched-amount" min="0" value="${amount}">
                 </div>
@@ -496,6 +496,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       scales: {
         y: {
+          beginAtZero: true,
           ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
         },
       },
