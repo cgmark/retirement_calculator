@@ -12,6 +12,7 @@ function buildDoc(overrides = {}) {
     spending: "",
     spendingMode: "input",
     amortizationRate: "",
+    targetEstateValue: "",
     targetSuccess: "",
     solvePrecision: "",
     lifeExpectancy: "",
@@ -58,6 +59,7 @@ describe("readScenarioInputs", () => {
     expect(inputs.currentAcb).toBe(0);
     expect(inputs.baseSpending).toBe(60000);
     expect(inputs.amortizationRate).toBe(0.03);
+    expect(inputs.targetEstateValue).toBe(0);
     expect(inputs.lifeExpectancy).toBe(100);
     expect(inputs.inflation).toBe(0.025);
     expect(inputs.growth).toBe(0.055);
@@ -80,5 +82,14 @@ describe("readScenarioInputs", () => {
     );
 
     expect(inputs.amortizationRate).toBe(0.042);
+  });
+
+  it("reads a custom target estate value", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ targetEstateValue: "250000" }),
+      () => [],
+    );
+
+    expect(inputs.targetEstateValue).toBe(250000);
   });
 });

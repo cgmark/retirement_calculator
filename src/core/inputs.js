@@ -12,6 +12,7 @@ export const SCENARIO_INPUT_DEFAULTS = {
   inflationPct: 2.5,
   growthPct: 5.5,
   amortizationRatePct: 3.0,
+  targetEstateValue: 0,
   cppScenarioAge: 65,
   cppMonthly: 0,
   oasPercent: 100,
@@ -54,6 +55,10 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   const amortizationRate =
     readFloat("amortizationRate", SCENARIO_INPUT_DEFAULTS.amortizationRatePct) /
     100;
+  const targetEstateValue = Math.max(
+    0,
+    readFloat("targetEstateValue", SCENARIO_INPUT_DEFAULTS.targetEstateValue),
+  );
   const targetSuccessRate = Math.max(
     0.5,
     Math.min(
@@ -147,6 +152,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     spendingSchedule,
     spendingMode,
     amortizationRate,
+    targetEstateValue,
     targetSuccessRate,
     solvePrecision,
     lifeExpectancy,

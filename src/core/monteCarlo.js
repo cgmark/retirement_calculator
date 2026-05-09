@@ -57,6 +57,7 @@ export async function runMonteCarlo(params) {
     shouldCancel,
     spendingMode = "input",
     amortizationRate = 0,
+    targetEstateValue = 0,
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -128,6 +129,7 @@ export async function runMonteCarlo(params) {
         inflationFactor,
         totalPortfolio: startingTotalPortfolio,
         amortizationRate,
+        targetEstateValue,
       });
       const targetSpending = targetBaseSpending * spendingReductionFactor;
       yearlySpending[i] = targetSpending;

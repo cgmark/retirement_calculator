@@ -38,6 +38,7 @@ export async function runDeterministicProjection(params) {
     effectiveStrategy,
     spendingMode = "input",
     amortizationRate = 0,
+    targetEstateValue = 0,
   } = params;
 
   let rrsp = rrspStart;
@@ -63,6 +64,7 @@ export async function runDeterministicProjection(params) {
       inflationFactor,
       totalPortfolio: startingTotalPortfolio,
       amortizationRate,
+      targetEstateValue,
     });
 
     let totalIncomeTaxThisYear = 0;

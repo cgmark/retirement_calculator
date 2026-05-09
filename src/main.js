@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "spending",
     "spendingMode",
     "amortizationRate",
+    "targetEstateValue",
     "targetSuccess",
     "solvePrecision",
     "lifeExpectancy",
@@ -101,6 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("nonregAcb", inputs.currentAcb);
       setInputValueIfChanged("spending", inputs.baseSpending);
       setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
+      setInputValueIfChanged("targetEstateValue", inputs.targetEstateValue);
       setInputValueIfChanged("targetSuccess", inputs.targetSuccessRate * 100);
       setInputValueIfChanged("solvePrecision", inputs.solvePrecision);
       setInputValueIfChanged("lifeExpectancy", inputs.lifeExpectancy);
@@ -923,6 +925,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const targetEl = document.getElementById("targetSuccessGroup");
     const precisionEl = document.getElementById("solvePrecisionGroup");
     const amortizationEl = document.getElementById("amortizationRateGroup");
+    const targetEstateEl = document.getElementById("targetEstateValueGroup");
     const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
@@ -949,6 +952,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (precisionEl) precisionEl.style.display = isSolveMode ? "block" : "none";
     if (amortizationEl)
       amortizationEl.style.display = isRollingMode ? "block" : "none";
+    if (targetEstateEl)
+      targetEstateEl.style.display = isRollingMode ? "block" : "none";
     if (scheduleGroup)
       scheduleGroup.style.display = usesManagedSpend ? "none" : "block";
     if (scheduleWrap)
@@ -977,7 +982,7 @@ document.addEventListener("DOMContentLoaded", () => {
       spendingHelp.innerText = isSolveMode
         ? "Solves a flat spend to hit your MC success target."
         : isRollingMode
-          ? "Recomputes annual spend from remaining assets, remaining years, and the amortization rate. Monte Carlo negative-return spending cuts are ignored in this mode."
+          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value. Monte Carlo negative-return spending cuts are ignored in this mode."
           : "Uses your entered spend.";
   }
 
