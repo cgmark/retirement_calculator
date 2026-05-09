@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getBaseSpendingForAge,
+  getScheduleMultiplierForAge,
   sanitizeScheduleRows,
   normalizeScheduleRows,
   getScheduleValidationError,
@@ -31,6 +32,21 @@ describe("getBaseSpendingForAge", () => {
     const schedule = [{ startAge: 65, endAge: 70, amount: 55000 }];
     expect(getBaseSpendingForAge(65, 60000, schedule)).toBe(55000);
     expect(getBaseSpendingForAge(70, 60000, schedule)).toBe(55000);
+  });
+});
+
+describe("getScheduleMultiplierForAge", () => {
+  it("returns 1 when schedule is missing", () => {
+    expect(getScheduleMultiplierForAge(70)).toBe(1);
+    expect(getScheduleMultiplierForAge(70, [])).toBe(1);
+  });
+
+  it("returns matching schedule multiplier for in-range age", () => {
+    const schedule = [
+      { startAge: 60, endAge: 69, amount: 100 },
+      { startAge: 70, endAge: 80, amount: 85 },
+    ];
+    expect(getScheduleMultiplierForAge(75, schedule)).toBe(0.85);
   });
 });
 

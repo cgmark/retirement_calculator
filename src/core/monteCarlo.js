@@ -6,7 +6,7 @@ import {
 } from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomNormal, percentile } from "./random.js";
-import { getBaseSpendingForAge } from "./spending.js";
+import { getTargetSpendingForYear } from "./spendingPolicy.js";
 import {
   applyProportionalDraw,
   applySequenceDraw,
@@ -55,6 +55,11 @@ export async function runMonteCarlo(params) {
     seed,
     onProgress,
     shouldCancel,
+    spendingMode = "input",
+    amortizationRate = 0,
+    targetEstateValue = 0,
+    rollingMinSpend = 0,
+    rollingMaxSpend = 0,
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -67,6 +72,7 @@ export async function runMonteCarlo(params) {
   const yearsCount = Math.max(1, projectionAge - age + 1);
   const ageLabels = Array.from({ length: yearsCount }, (_, i) => age + i);
   const assetsByYear = Array.from({ length: yearsCount }, () => []);
+  const spendingByYear = Array.from({ length: yearsCount }, () => []);
   const successBucketLabel = `${projectionAge}+ (Success)`;
   const bucketLabels = [
     "Before 65",
@@ -100,10 +106,12 @@ export async function runMonteCarlo(params) {
     let thisClawback = 0;
     let mcInflationFactor = 1;
     const yearlyAssets = new Array(yearsCount).fill(0);
+    const yearlySpending = new Array(yearsCount).fill(0);
 
     for (let i = 0; age + i <= projectionAge; i++) {
       const currentAge = age + i;
-      const shouldApplyBadYearCut = badYearSpendCutPct > 0;
+      const shouldApplyBadYearCut =
+        spendingMode !== "rolling-amortization" && badYearSpendCutPct > 0;
       const sampledGrowthForSpending = shouldApplyBadYearCut
         ? growth + volatility * randomNormal(rng)
         : null;
@@ -113,13 +121,22 @@ export async function runMonteCarlo(params) {
           : 1;
       // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
       const inflationFactor = mcInflationFactor;
-      const ageBaseSpending = getBaseSpendingForAge(
+      const startingTotalPortfolio = rrsp + tfsa + nonreg;
+      const targetBaseSpending = getTargetSpendingForYear({
+        spendingMode,
         currentAge,
+        projectionAge,
         baseSpending,
-        spendingSchedule,
-      );
-      const targetSpending =
-        ageBaseSpending * inflationFactor * spendingReductionFactor;
+        schedule: spendingSchedule,
+        inflationFactor,
+        totalPortfolio: startingTotalPortfolio,
+        amortizationRate,
+        targetEstateValue,
+        rollingMinSpend,
+        rollingMaxSpend,
+      });
+      const targetSpending = targetBaseSpending * spendingReductionFactor;
+      yearlySpending[i] = targetSpending;
 
       let totalIncomeTaxThisYear = 0;
       let oasClawbackThisYear = 0;
@@ -375,6 +392,8 @@ export async function runMonteCarlo(params) {
     totalTax += thisTax;
     totalClawback += thisClawback;
     for (let i = 0; i < yearsCount; i++) assetsByYear[i].push(yearlyAssets[i]);
+    for (let i = 0; i < yearsCount; i++)
+      spendingByYear[i].push(yearlySpending[i]);
     completedTrials++;
 
     if ((t + 1) % chunkSize === 0 || t === trials - 1) {
@@ -384,6 +403,11 @@ export async function runMonteCarlo(params) {
         const partialP50 = assetsByYear.map((v) => percentile(v, 50));
         const partialP75 = assetsByYear.map((v) => percentile(v, 75));
         const partialP90 = assetsByYear.map((v) => percentile(v, 90));
+        const partialSpendP10 = spendingByYear.map((v) => percentile(v, 10));
+        const partialSpendP25 = spendingByYear.map((v) => percentile(v, 25));
+        const partialSpendP50 = spendingByYear.map((v) => percentile(v, 50));
+        const partialSpendP75 = spendingByYear.map((v) => percentile(v, 75));
+        const partialSpendP90 = spendingByYear.map((v) => percentile(v, 90));
         onProgress(
           completedTrials,
           trials,
@@ -395,6 +419,11 @@ export async function runMonteCarlo(params) {
           partialP50,
           partialP75,
           partialP90,
+          partialSpendP10,
+          partialSpendP25,
+          partialSpendP50,
+          partialSpendP75,
+          partialSpendP90,
         );
       }
       // Yield to the event loop to keep the page responsive during long runs.
@@ -422,6 +451,11 @@ export async function runMonteCarlo(params) {
       assetP50: [],
       assetP75: [],
       assetP90: [],
+      spendP10: [],
+      spendP25: [],
+      spendP50: [],
+      spendP75: [],
+      spendP90: [],
     };
   }
 
@@ -430,6 +464,11 @@ export async function runMonteCarlo(params) {
   const assetP50 = assetsByYear.map((v) => percentile(v, 50));
   const assetP75 = assetsByYear.map((v) => percentile(v, 75));
   const assetP90 = assetsByYear.map((v) => percentile(v, 90));
+  const spendP10 = spendingByYear.map((v) => percentile(v, 10));
+  const spendP25 = spendingByYear.map((v) => percentile(v, 25));
+  const spendP50 = spendingByYear.map((v) => percentile(v, 50));
+  const spendP75 = spendingByYear.map((v) => percentile(v, 75));
+  const spendP90 = spendingByYear.map((v) => percentile(v, 90));
 
   return {
     trials: completedTrials,
@@ -452,5 +491,10 @@ export async function runMonteCarlo(params) {
     assetP50,
     assetP75,
     assetP90,
+    spendP10,
+    spendP25,
+    spendP50,
+    spendP75,
+    spendP90,
   };
 }

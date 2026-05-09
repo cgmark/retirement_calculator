@@ -6,6 +6,14 @@ export function getBaseSpendingForAge(currentAge, defaultSpending, schedule) {
   return row ? row.amount : defaultSpending;
 }
 
+export function getScheduleMultiplierForAge(currentAge, schedule) {
+  if (!Array.isArray(schedule) || schedule.length === 0) return 1;
+  const row = schedule.find(
+    (r) => currentAge >= r.startAge && currentAge <= r.endAge,
+  );
+  return row ? row.amount / 100 : 1;
+}
+
 export function sanitizeScheduleRows(
   rows,
   defaults = { startAge: 60, endAge: 100, amount: 60000 },

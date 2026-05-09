@@ -4,7 +4,6 @@ import {
   sanitizeScheduleRows,
   normalizeScheduleRows,
   getScheduleValidationError,
-  buildFlatSchedule,
 } from "./core/spending.js";
 import { runDeterministicProjection } from "./core/projection.js";
 import { solveSustainableSpending } from "./core/solveSpending.js";
@@ -17,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let incomeChartInst = null;
   let mcOutcomeChartInst = null;
   let mcPercentileChartInst = null;
+  let mcSpendPercentileChartInst = null;
   let lastMonteCarloResults = null;
   let lastMonteCarloMeta = null;
   let mcCancelRequested = false;
@@ -35,6 +35,10 @@ document.addEventListener("DOMContentLoaded", () => {
     "retirementAge",
     "spending",
     "spendingMode",
+    "amortizationRate",
+    "targetEstateValue",
+    "rollingMinSpend",
+    "rollingMaxSpend",
     "targetSuccess",
     "solvePrecision",
     "lifeExpectancy",
@@ -98,6 +102,10 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("nonreg", inputs.nonreg);
       setInputValueIfChanged("nonregAcb", inputs.currentAcb);
       setInputValueIfChanged("spending", inputs.baseSpending);
+      setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
+      setInputValueIfChanged("targetEstateValue", inputs.targetEstateValue);
+      setInputValueIfChanged("rollingMinSpend", inputs.rollingMinSpend);
+      setInputValueIfChanged("rollingMaxSpend", inputs.rollingMaxSpend);
       setInputValueIfChanged("targetSuccess", inputs.targetSuccessRate * 100);
       setInputValueIfChanged("solvePrecision", inputs.solvePrecision);
       setInputValueIfChanged("lifeExpectancy", inputs.lifeExpectancy);
@@ -170,14 +178,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 <input type="number" class="sched-end" min="0" max="120" value="${endAge}">
             </div>
             <div class="form-group" style="margin-bottom:0; display:flex; gap:6px; align-items:flex-end;">
-                <div style="flex:1;">
-                    <label>Net Spend/Yr</label>
+                <div style="flex:1; min-width:0;">
+                    <label class="sched-amount-label">Net Spend/Yr</label>
                     <input type="number" class="sched-amount" min="0" value="${amount}">
                 </div>
                 <button type="button" class="remove-spending-row" title="Remove phase" aria-label="Remove phase" style="width:30px; min-width:30px; height:36px; margin-top:0; padding:0; font-size:1rem; line-height:1; display:flex; align-items:center; justify-content:center; background:#64748b;">×</button>
             </div>
         `;
     return row;
+  }
+
+  function updateSpendingScheduleLabels() {
+    const sectionLabel = document.getElementById("spendingScheduleLabel");
+    if (sectionLabel) {
+      sectionLabel.innerText = "Optional Age Adjustments (%)";
+    }
+
+    document.querySelectorAll(".sched-amount-label").forEach((label) => {
+      label.innerText = "Spend Adjustment (%)";
+    });
   }
 
   function saveSpendingSchedule() {
@@ -190,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
         amount: parseFloat(row.querySelector(".sched-amount").value),
       }));
       localStorage.setItem(
-        "retirePlanner_spendingSchedule",
+        "retirePlanner_ageAdjustments",
         JSON.stringify(rows),
       );
     } catch (e) {
@@ -201,10 +220,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function loadSpendingSchedule() {
     const container = document.getElementById("spendingScheduleRows");
     container.innerHTML = "";
+    updateSpendingScheduleLabels();
 
     let rows = null;
     try {
-      const raw = localStorage.getItem("retirePlanner_spendingSchedule");
+      const raw = localStorage.getItem("retirePlanner_ageAdjustments");
       if (raw) rows = JSON.parse(raw);
     } catch (e) {
       console.warn("Spending schedule load failed", e);
@@ -217,12 +237,8 @@ document.addEventListener("DOMContentLoaded", () => {
         "lifeExpectancy",
         SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
       );
-      const spend = readUiFloat(
-        "spending",
-        SCENARIO_INPUT_DEFAULTS.baseSpending,
-      );
       container.appendChild(
-        createSpendingScheduleRow(currentAge, lifeExpectancy, spend),
+        createSpendingScheduleRow(currentAge, lifeExpectancy, 100),
       );
       return;
     }
@@ -265,7 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cleaned.length === 0) {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "No valid schedule rows found. Using default Desired Net Spend/Yr.";
+        "No valid age adjustments found. Using 100% through all ages.";
       return [];
     }
 
@@ -273,13 +289,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (validationError === "invalid-range") {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "Each row needs Start Age <= End Age. Using default Desired Net Spend/Yr.";
+        "Each row needs Start Age <= End Age. Using 100% through all ages.";
       return [];
     }
     if (validationError === "overlap") {
       statusEl.style.color = "#b91c1c";
       statusEl.innerText =
-        "Spending schedule rows overlap. Using default Desired Net Spend/Yr.";
+        "Age adjustment rows overlap. Using 100% through all ages.";
       return [];
     }
 
@@ -300,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     statusEl.style.color = "#166534";
-    statusEl.innerText = `Using ${cleaned.length} spending phase${cleaned.length === 1 ? "" : "s"} through age ${lifeExpectancy}.`;
+    statusEl.innerText = `Using ${cleaned.length} age adjustment phase${cleaned.length === 1 ? "" : "s"} through age ${lifeExpectancy}.`;
     return cleaned;
   }
 
@@ -484,6 +500,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       scales: {
         y: {
+          beginAtZero: true,
           ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
         },
       },
@@ -504,6 +521,127 @@ document.addEventListener("DOMContentLoaded", () => {
     mcPercentileChartInst.data = data;
     mcPercentileChartInst.options = options;
     mcPercentileChartInst.update("none");
+  }
+
+  function renderMonteCarloSpendPercentileChart(monteCarloResults) {
+    const card = document.getElementById("mcSpendPercentileCard");
+    const subtitle = document.getElementById("mcSpendPercentileSubtitle");
+    if (!card || !subtitle) return;
+
+    if (
+      !monteCarloResults ||
+      !monteCarloResults.trials ||
+      !monteCarloResults.ageLabels?.length
+    ) {
+      if (mcSpendPercentileChartInst) {
+        mcSpendPercentileChartInst.destroy();
+        mcSpendPercentileChartInst = null;
+      }
+      card.style.display = "none";
+      subtitle.innerText = "";
+      return;
+    }
+
+    card.style.display = "block";
+    const displayInflated = document.getElementById("displayMode").checked;
+    const baseInflation =
+      readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
+    subtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? " (partial run)" : ""}. P10 means 10% of paths spent below this level. Values shown in ${displayInflated ? "inflated/nominal" : "today's"} dollars.`;
+
+    const labels = monteCarloResults.ageLabels;
+    const adjustSeries = (series) =>
+      (series || []).map((v, idx) => {
+        if (displayInflated) return v;
+        return v / Math.pow(1 + baseInflation, idx);
+      });
+    const p10 = adjustSeries(monteCarloResults.spendP10);
+    const p25 = adjustSeries(monteCarloResults.spendP25);
+    const p50 = adjustSeries(monteCarloResults.spendP50);
+    const p75 = adjustSeries(monteCarloResults.spendP75);
+    const p90 = adjustSeries(monteCarloResults.spendP90);
+
+    const data = {
+      labels,
+      datasets: [
+        {
+          label: "P10",
+          data: p10,
+          borderColor: "#f59e0b",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P25",
+          data: p25,
+          borderColor: "#0ea5a4",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P75",
+          data: p75,
+          borderColor: "#0ea5a4",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: "-1",
+          backgroundColor: "rgba(14,165,164,0.18)",
+        },
+        {
+          label: "P50",
+          data: p50,
+          borderColor: "#0f766e",
+          borderWidth: 2.5,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P90",
+          data: p90,
+          borderColor: "#2563eb",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: "-1",
+          backgroundColor: "rgba(37,99,235,0.10)",
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
+        },
+      },
+    };
+
+    if (!mcSpendPercentileChartInst) {
+      mcSpendPercentileChartInst = new Chart(
+        document.getElementById("mcSpendPercentileChart").getContext("2d"),
+        {
+          type: "line",
+          data,
+          options,
+        },
+      );
+      return;
+    }
+
+    mcSpendPercentileChartInst.data = data;
+    mcSpendPercentileChartInst.options = options;
+    mcSpendPercentileChartInst.update("none");
   }
 
   async function calculateRetirement(runMonteCarloNow = true) {
@@ -573,6 +711,11 @@ document.addEventListener("DOMContentLoaded", () => {
           assetP50,
           assetP75,
           assetP90,
+          spendP10,
+          spendP25,
+          spendP50,
+          spendP75,
+          spendP90,
         ) => {
           if (runStatusEl) {
             const pct = ((done / total) * 100).toFixed(0);
@@ -591,6 +734,11 @@ document.addEventListener("DOMContentLoaded", () => {
             assetP50,
             assetP75,
             assetP90,
+            spendP10,
+            spendP25,
+            spendP50,
+            spendP75,
+            spendP90,
           });
           renderMonteCarloPercentileChart({
             trials: done,
@@ -604,6 +752,19 @@ document.addEventListener("DOMContentLoaded", () => {
             assetP50,
             assetP75,
             assetP90,
+          });
+          renderMonteCarloSpendPercentileChart({
+            trials: done,
+            requestedTrials: total,
+            cancelled: false,
+            bucketLabels,
+            bucketCounts,
+            ageLabels,
+            spendP10,
+            spendP25,
+            spendP50,
+            spendP75,
+            spendP90,
           });
         },
         shouldCancel: () => mcCancelRequested,
@@ -655,6 +816,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const spendingEl = document.getElementById("spending");
         if (spendingEl)
           spendingEl.value = Math.round(outcome.solvedSpendOutput);
+      } else if (outcome.spendingMode === "rolling-amortization") {
+        const firstYearSpendValue = document.getElementById(
+          "firstYearSpendValue",
+        );
+        if (firstYearSpendValue)
+          firstYearSpendValue.innerText = formatCurrency(
+            outcome.currentYearSpending,
+          );
       }
       if (
         outcome.monteCarloResults &&
@@ -715,6 +884,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const defaultOpen = {
       "Basic Info & Taxes": false,
+      "Spending Policy": true,
       "Current Assets ($)": false,
       "Canada Pension Plan (CPP)": false,
       "Old Age Security (OAS)": false,
@@ -766,6 +936,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = document.getElementById("spendingMode").value;
     const targetEl = document.getElementById("targetSuccessGroup");
     const precisionEl = document.getElementById("solvePrecisionGroup");
+    const amortizationEl = document.getElementById("amortizationRateGroup");
+    const targetEstateEl = document.getElementById("targetEstateValueGroup");
+    const minSpendEl = document.getElementById("rollingMinSpendGroup");
+    const maxSpendEl = document.getElementById("rollingMaxSpendGroup");
     const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
@@ -773,9 +947,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const spendingInput = document.getElementById("spending");
     const spendingLabel = document.getElementById("spendingLabel");
     const spendingInputGroup = document.getElementById("spendingInputGroup");
+    const firstYearSpendSummary = document.getElementById(
+      "firstYearSpendSummary",
+    );
     const spendingHelp = document.getElementById("spendingModeHelp");
     const toggle = document.getElementById("spendingModeToggle");
-    const visible = mode === "solve";
+    const isSolveMode = mode === "solve";
+    const isRollingMode = mode === "rolling-amortization";
 
     if (toggle) {
       toggle.querySelectorAll("button[data-mode]").forEach((btn) => {
@@ -783,52 +961,48 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    if (targetEl) targetEl.style.display = visible ? "block" : "none";
-    if (precisionEl) precisionEl.style.display = visible ? "block" : "none";
-    if (scheduleGroup) scheduleGroup.style.display = visible ? "none" : "block";
-    if (scheduleWrap) scheduleWrap.style.display = visible ? "none" : "block";
-    if (scheduleNote) scheduleNote.style.display = "none";
+    if (targetEl) targetEl.style.display = isSolveMode ? "block" : "none";
+    if (precisionEl) precisionEl.style.display = isSolveMode ? "block" : "none";
+    if (amortizationEl)
+      amortizationEl.style.display = isRollingMode ? "block" : "none";
+    if (targetEstateEl)
+      targetEstateEl.style.display = isRollingMode ? "block" : "none";
+    if (minSpendEl) minSpendEl.style.display = isRollingMode ? "block" : "none";
+    if (maxSpendEl) maxSpendEl.style.display = isRollingMode ? "block" : "none";
+    if (scheduleGroup) scheduleGroup.style.display = "block";
+    if (scheduleWrap)
+      scheduleWrap.style.display = isSolveMode ? "none" : "block";
+    if (scheduleNote)
+      scheduleNote.style.display = isSolveMode ? "block" : "none";
     if (scheduleStatus)
-      scheduleStatus.style.display = visible ? "none" : "block";
+      scheduleStatus.style.display = isSolveMode ? "none" : "block";
+    if (spendingInputGroup)
+      spendingInputGroup.style.display = isRollingMode ? "none" : "grid";
+    if (firstYearSpendSummary)
+      firstYearSpendSummary.style.display = isRollingMode ? "block" : "none";
     if (spendingInput) {
-      spendingInput.readOnly = visible;
-      spendingInput.style.backgroundColor = visible ? "#f1f5f9" : "#fff";
-      spendingInput.style.cursor = visible ? "not-allowed" : "text";
+      spendingInput.readOnly = isSolveMode;
+      spendingInput.style.backgroundColor = isSolveMode ? "#f1f5f9" : "#fff";
+      spendingInput.style.cursor = isSolveMode ? "not-allowed" : "text";
     }
     if (spendingLabel)
-      spendingLabel.innerText = visible
+      spendingLabel.innerText = isSolveMode
         ? "Solved Net Spend/Yr"
-        : "Desired Net Spend/Yr";
+        : isRollingMode
+          ? "Rolling Net Spend/Yr"
+          : "Desired Net Spend/Yr";
     if (spendingInputGroup)
-      spendingInputGroup.style.opacity = visible ? "0.9" : "1";
+      spendingInputGroup.style.opacity = isSolveMode ? "0.9" : "1";
     if (spendingHelp)
-      spendingHelp.innerText = visible
+      spendingHelp.innerText = isSolveMode
         ? "Solves a flat spend to hit your MC success target."
-        : "Uses your entered spend.";
-  }
-
-  function replaceWithFlatScheduleFromCurrentSpend(spendOverride = null) {
-    const container = document.getElementById("spendingScheduleRows");
-    if (!container) return;
-    const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
-    const lifeExpectancy = Math.max(
-      currentAge,
-      Math.min(
-        120,
-        readUiInt("lifeExpectancy", SCENARIO_INPUT_DEFAULTS.lifeExpectancy),
-      ),
-    );
-    const spend = Number.isFinite(spendOverride)
-      ? spendOverride
-      : readUiFloat("spending", SCENARIO_INPUT_DEFAULTS.baseSpending);
-    const flatRows = buildFlatSchedule(currentAge, lifeExpectancy, spend);
-    container.innerHTML = "";
-    flatRows.forEach((row) =>
-      container.appendChild(
-        createSpendingScheduleRow(row.startAge, row.endAge, row.amount),
-      ),
-    );
-    saveSpendingSchedule();
+        : isRollingMode
+          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value, then applies your min/max spend bounds. Monte Carlo negative-return spending cuts are ignored in this mode."
+          : "Uses your entered spend.";
+    if (scheduleNote)
+      scheduleNote.innerText =
+        "Age adjustments are ignored in sustainable mode because the solver uses one flat annual spend.";
+    updateSpendingScheduleLabels();
   }
 
   function updateUI(
@@ -855,6 +1029,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("mcSummary").innerHTML = "";
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
       const debugEl = document.getElementById("debugSummary");
       if (debugEl) {
         debugEl.style.display = "none";
@@ -1001,9 +1176,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (monteCarloEnabled) {
       renderMonteCarloOutcomeChart(monteCarloResults);
       renderMonteCarloPercentileChart(monteCarloResults);
+      renderMonteCarloSpendPercentileChart(monteCarloResults);
     } else {
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
     }
 
     const debugMode = document.getElementById("debugMode").value;
@@ -1300,7 +1477,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const prevMode = modeInput.value;
       modeInput.value = btn.dataset.mode;
 
-      if (prevMode === "input" && modeInput.value === "solve") {
+      if (prevMode === "input" && modeInput.value !== "input") {
         const spendEl = document.getElementById("spending");
         const val = spendEl ? parseFloat(spendEl.value) : NaN;
         desiredSpendBeforeSolve = Number.isFinite(val)
@@ -1308,29 +1485,23 @@ document.addEventListener("DOMContentLoaded", () => {
           : desiredSpendBeforeSolve;
       }
 
-      if (prevMode === "solve" && modeInput.value === "input") {
+      if (prevMode !== "input" && modeInput.value === "input") {
         const spendEl = document.getElementById("spending");
-        const solvedSpend = Number.isFinite(lastSolvedSpend)
-          ? lastSolvedSpend
-          : parseFloat(spendEl?.value) || 0;
+        const solvedSpend =
+          prevMode === "solve" && Number.isFinite(lastSolvedSpend)
+            ? lastSolvedSpend
+            : parseFloat(spendEl?.value) || 0;
         const desiredSpend = Number.isFinite(desiredSpendBeforeSolve)
           ? desiredSpendBeforeSolve
           : solvedSpend;
 
         if (
+          prevMode === "solve" &&
           spendEl &&
           Number.isFinite(solvedSpend) &&
           Math.round(desiredSpend) !== Math.round(solvedSpend)
         ) {
-          const applySolvedEverywhere = window.confirm(
-            "Your previous desired spend differs from the solved spend.\n\nDo you want to update BOTH Desired Net Spend/Yr and the spending schedule to the solved value for a like-for-like comparison?",
-          );
-          if (applySolvedEverywhere) {
-            spendEl.value = Math.round(solvedSpend);
-            replaceWithFlatScheduleFromCurrentSpend(solvedSpend);
-          } else {
-            spendEl.value = Math.round(desiredSpend);
-          }
+          spendEl.value = Math.round(desiredSpend);
         } else if (spendEl) {
           spendEl.value = Math.round(desiredSpend);
         }
@@ -1352,10 +1523,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "lifeExpectancy",
         SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
       );
-      let nextAmount = readUiFloat(
-        "spending",
-        SCENARIO_INPUT_DEFAULTS.baseSpending,
-      );
+      let nextAmount = 100;
       if (lastRow) {
         const prevEnd = parseInt(lastRow.querySelector(".sched-end").value);
         const prevAmt = parseFloat(
@@ -1405,15 +1573,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "enableMonteCarlo") updateMonteCarloSettingsVisibility();
         if (id === "spendingMode") updateSpendingModeVisibility();
 
-        if (id === "age" || id === "spending" || id === "lifeExpectancy") {
+        if (id === "age" || id === "lifeExpectancy") {
           const rows = document.querySelectorAll(
             "#spendingScheduleRows .spending-row",
           );
           if (rows.length === 1) {
             const r = rows[0];
             if (id === "age") r.querySelector(".sched-start").value = el.value;
-            if (id === "spending")
-              r.querySelector(".sched-amount").value = el.value;
             if (id === "lifeExpectancy")
               r.querySelector(".sched-end").value = el.value;
             saveSpendingSchedule();

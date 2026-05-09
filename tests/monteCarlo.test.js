@@ -53,6 +53,9 @@ describe("runMonteCarlo", () => {
     expect(res.assetP10.length).toBe(res.ageLabels.length);
     expect(res.assetP50.length).toBe(res.ageLabels.length);
     expect(res.assetP90.length).toBe(res.ageLabels.length);
+    expect(res.spendP10.length).toBe(res.ageLabels.length);
+    expect(res.spendP50.length).toBe(res.ageLabels.length);
+    expect(res.spendP90.length).toBe(res.ageLabels.length);
     expect(
       res.bucketLabels.every((label) =>
         Number.isFinite(res.bucketCounts[label]),
@@ -163,6 +166,52 @@ describe("runMonteCarlo", () => {
     );
 
     expect(withCut).not.toEqual(noCut);
+    expect(withCut.spendP50).not.toEqual(noCut.spendP50);
+  });
+
+  it("ignores bad-year spending cut in rolling amortization mode", async () => {
+    const noCut = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        badYearSpendCutPct: 0,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+      }),
+    );
+    const withCut = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        badYearSpendCutPct: 0.2,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+      }),
+    );
+
+    expect(withCut).toEqual(noCut);
   });
 
   it("runs with working years and surplus contributions", async () => {

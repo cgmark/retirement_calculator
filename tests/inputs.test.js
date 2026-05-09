@@ -11,6 +11,10 @@ function buildDoc(overrides = {}) {
     nonregAcb: "",
     spending: "",
     spendingMode: "input",
+    amortizationRate: "",
+    targetEstateValue: "",
+    rollingMinSpend: "",
+    rollingMaxSpend: "",
     targetSuccess: "",
     solvePrecision: "",
     lifeExpectancy: "",
@@ -56,6 +60,10 @@ describe("readScenarioInputs", () => {
     expect(inputs.nonreg).toBe(0);
     expect(inputs.currentAcb).toBe(0);
     expect(inputs.baseSpending).toBe(60000);
+    expect(inputs.amortizationRate).toBe(0.03);
+    expect(inputs.targetEstateValue).toBe(0);
+    expect(inputs.rollingMinSpend).toBe(0);
+    expect(inputs.rollingMaxSpend).toBe(0);
     expect(inputs.lifeExpectancy).toBe(100);
     expect(inputs.inflation).toBe(0.025);
     expect(inputs.growth).toBe(0.055);
@@ -69,5 +77,33 @@ describe("readScenarioInputs", () => {
     );
 
     expect(inputs.currentAcb).toBe(1000);
+  });
+
+  it("reads a custom amortization rate", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ amortizationRate: "4.2" }),
+      () => [],
+    );
+
+    expect(inputs.amortizationRate).toBe(0.042);
+  });
+
+  it("reads a custom target estate value", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ targetEstateValue: "250000" }),
+      () => [],
+    );
+
+    expect(inputs.targetEstateValue).toBe(250000);
+  });
+
+  it("reads and clamps rolling min/max spend bounds", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ rollingMinSpend: "55000", rollingMaxSpend: "40000" }),
+      () => [],
+    );
+
+    expect(inputs.rollingMinSpend).toBe(55000);
+    expect(inputs.rollingMaxSpend).toBe(55000);
   });
 });

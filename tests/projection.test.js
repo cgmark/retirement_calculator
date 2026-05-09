@@ -39,6 +39,34 @@ describe("runDeterministicProjection", () => {
     expect(results[0].total).toBeCloseTo(73850.8705, 6);
   });
 
+  it("applies age adjustment multipliers in desired mode", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 1000000,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [{ startAge: 60, endAge: 60, amount: 80 }],
+      lifeExpectancy: 60,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].spending).toBeCloseTo(48000, 6);
+    expect(results[0].drawTFSA).toBeCloseTo(48000, 6);
+  });
+
   it("clamps deterministic growth so balances never go negative from returns below -100%", async () => {
     const { results } = await runDeterministicProjection({
       age: 65,
@@ -203,5 +231,105 @@ describe("runDeterministicProjection", () => {
     expect(results[0].tfsa).toBeCloseTo(57000, 6);
     expect(results[0].nonreg).toBeCloseTo(59626.78136090365, 6);
     expect(results[0].total).toBeCloseTo(571674.9222430347, 6);
+  });
+
+  it("recomputes rolling amortized spending from remaining assets and years", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 1000000,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 61,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+      spendingMode: "rolling-amortization",
+      amortizationRate: 0.03,
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].spending).toBeCloseTo(507389.1625615762, 6);
+    expect(results[0].drawTFSA).toBeCloseTo(507389.1625615762, 6);
+    expect(results[1].spending).toBeCloseTo(492610.83743842406, 6);
+    expect(results[1].drawTFSA).toBeCloseTo(492610.8374384238, 6);
+    expect(results[1].spending).toBeLessThan(results[0].spending);
+  });
+
+  it("leaves target estate value at the end in rolling amortization mode", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 1000000,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 61,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+      spendingMode: "rolling-amortization",
+      amortizationRate: 0.03,
+      targetEstateValue: 100000,
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].spending).toBeCloseTo(458128.0788177338, 6);
+    expect(results[1].spending).toBeCloseTo(441871.9211822664, 6);
+    expect(results[1].total).toBeCloseTo(100000, 6);
+    expect(results[1].spending).toBeLessThan(results[0].spending);
+  });
+
+  it("uses spend-need multipliers in rolling amortization mode", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 1000000,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [
+        { startAge: 60, endAge: 60, amount: 100 },
+        { startAge: 61, endAge: 61, amount: 80 },
+      ],
+      lifeExpectancy: 61,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+      spendingMode: "rolling-amortization",
+      amortizationRate: 0.03,
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].spending).toBeCloseTo(507389.1625615762, 6);
+    expect(results[1].spending).toBeCloseTo(394088.669950739, 6);
+    expect(results[1].drawTFSA).toBeCloseTo(394088.669950739, 6);
   });
 });
