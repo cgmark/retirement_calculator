@@ -112,7 +112,8 @@
       }
       .segmented-toggle {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
         border: 1px solid #cbd5e1;
         border-radius: 8px;
         overflow: hidden;
@@ -124,7 +125,8 @@
         padding: 8px;
         background: #f8fafc;
         color: #334155;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
+        white-space: nowrap;
       }
       .segmented-toggle button.active {
         background: #0f766e;
@@ -405,6 +407,35 @@
                 >
                 <input type="number" id="grossEmploymentIncome" value="0" />
               </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Inflation Rate (%)</label
+                  ><input type="number" id="inflation" value="2.5" step="0.1" />
+                </div>
+                <div class="form-group">
+                  <label>Invest Growth (%)</label
+                  ><input type="number" id="growth" value="5.5" step="0.1" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Province of Residence (2024 Tax Brackets)</label>
+                <select id="province">
+                  <option value="ON" selected>Ontario</option>
+                  <option value="BC">British Columbia</option>
+                  <option value="AB">Alberta</option>
+                  <option value="QC">Quebec (Simplified)</option>
+                  <option value="MB">Manitoba</option>
+                  <option value="SK">Saskatchewan</option>
+                  <option value="NS">Nova Scotia</option>
+                  <option value="NB">New Brunswick</option>
+                  <option value="NL">Newfoundland & Labrador</option>
+                  <option value="PE">Prince Edward Island</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="input-section">
+              <h4>Spending Policy</h4>
               <div class="form-group">
                 <div class="form-group">
                   <label>Spending Mode</label>
@@ -413,6 +444,9 @@
                       Desired
                     </button>
                     <button type="button" data-mode="solve">Sustainable</button>
+                    <button type="button" data-mode="rolling-amortization">
+                      Rolling
+                    </button>
                   </div>
                   <input type="hidden" id="spendingMode" value="input" />
                   <div
@@ -438,6 +472,18 @@
                 >
                 <input type="number" id="spending" value="60000" />
               </div>
+              <div
+                class="form-group"
+                id="firstYearSpendSummary"
+                style="display: none; margin-top: -4px; font-size: 0.9rem"
+              >
+                <strong>First Year Spend:</strong>
+                <span id="firstYearSpendValue">-</span><br />
+                <span style="font-size: 0.8rem; color: #64748b"
+                  >Recomputed from remaining assets, remaining years, and
+                  amortization rate.</span
+                >
+              </div>
               <div class="form-group" id="targetSuccessGroup">
                 <label>Target MC Success (%)</label
                 ><input
@@ -458,6 +504,17 @@
                   min="100"
                   max="5000"
                   step="100"
+                />
+              </div>
+              <div class="form-group" id="amortizationRateGroup">
+                <label>Amortization Rate (%)</label
+                ><input
+                  type="number"
+                  id="amortizationRate"
+                  value="3.0"
+                  min="0"
+                  max="10"
+                  step="0.1"
                 />
               </div>
               <div
@@ -498,31 +555,6 @@
                   id="spendingScheduleStatus"
                   style="margin-top: 6px; font-size: 0.8rem; color: #64748b"
                 ></div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Inflation Rate (%)</label
-                  ><input type="number" id="inflation" value="2.5" step="0.1" />
-                </div>
-                <div class="form-group">
-                  <label>Invest Growth (%)</label
-                  ><input type="number" id="growth" value="5.5" step="0.1" />
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Province of Residence (2024 Tax Brackets)</label>
-                <select id="province">
-                  <option value="ON" selected>Ontario</option>
-                  <option value="BC">British Columbia</option>
-                  <option value="AB">Alberta</option>
-                  <option value="QC">Quebec (Simplified)</option>
-                  <option value="MB">Manitoba</option>
-                  <option value="SK">Saskatchewan</option>
-                  <option value="NS">Nova Scotia</option>
-                  <option value="NB">New Brunswick</option>
-                  <option value="NL">Newfoundland & Labrador</option>
-                  <option value="PE">Prince Edward Island</option>
-                </select>
               </div>
             </div>
 
@@ -914,6 +946,19 @@
             ></div>
             <div class="chart-wrapper">
               <canvas id="mcPercentileChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card" id="mcSpendPercentileCard" style="display: none">
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Monte Carlo Spending Percentiles Over Time
+            </h3>
+            <div
+              id="mcSpendPercentileSubtitle"
+              style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+            ></div>
+            <div class="chart-wrapper">
+              <canvas id="mcSpendPercentileChart"></canvas>
             </div>
           </div>
 

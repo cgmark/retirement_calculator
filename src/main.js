@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let incomeChartInst = null;
   let mcOutcomeChartInst = null;
   let mcPercentileChartInst = null;
+  let mcSpendPercentileChartInst = null;
   let lastMonteCarloResults = null;
   let lastMonteCarloMeta = null;
   let mcCancelRequested = false;
@@ -35,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "retirementAge",
     "spending",
     "spendingMode",
+    "amortizationRate",
     "targetSuccess",
     "solvePrecision",
     "lifeExpectancy",
@@ -98,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("nonreg", inputs.nonreg);
       setInputValueIfChanged("nonregAcb", inputs.currentAcb);
       setInputValueIfChanged("spending", inputs.baseSpending);
+      setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
       setInputValueIfChanged("targetSuccess", inputs.targetSuccessRate * 100);
       setInputValueIfChanged("solvePrecision", inputs.solvePrecision);
       setInputValueIfChanged("lifeExpectancy", inputs.lifeExpectancy);
@@ -506,6 +509,127 @@ document.addEventListener("DOMContentLoaded", () => {
     mcPercentileChartInst.update("none");
   }
 
+  function renderMonteCarloSpendPercentileChart(monteCarloResults) {
+    const card = document.getElementById("mcSpendPercentileCard");
+    const subtitle = document.getElementById("mcSpendPercentileSubtitle");
+    if (!card || !subtitle) return;
+
+    if (
+      !monteCarloResults ||
+      !monteCarloResults.trials ||
+      !monteCarloResults.ageLabels?.length
+    ) {
+      if (mcSpendPercentileChartInst) {
+        mcSpendPercentileChartInst.destroy();
+        mcSpendPercentileChartInst = null;
+      }
+      card.style.display = "none";
+      subtitle.innerText = "";
+      return;
+    }
+
+    card.style.display = "block";
+    const displayInflated = document.getElementById("displayMode").checked;
+    const baseInflation =
+      readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
+    subtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? " (partial run)" : ""}. P10 means 10% of paths spent below this level. Values shown in ${displayInflated ? "inflated/nominal" : "today's"} dollars.`;
+
+    const labels = monteCarloResults.ageLabels;
+    const adjustSeries = (series) =>
+      (series || []).map((v, idx) => {
+        if (displayInflated) return v;
+        return v / Math.pow(1 + baseInflation, idx);
+      });
+    const p10 = adjustSeries(monteCarloResults.spendP10);
+    const p25 = adjustSeries(monteCarloResults.spendP25);
+    const p50 = adjustSeries(monteCarloResults.spendP50);
+    const p75 = adjustSeries(monteCarloResults.spendP75);
+    const p90 = adjustSeries(monteCarloResults.spendP90);
+
+    const data = {
+      labels,
+      datasets: [
+        {
+          label: "P10",
+          data: p10,
+          borderColor: "#f59e0b",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P25",
+          data: p25,
+          borderColor: "#0ea5a4",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P75",
+          data: p75,
+          borderColor: "#0ea5a4",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: "-1",
+          backgroundColor: "rgba(14,165,164,0.18)",
+        },
+        {
+          label: "P50",
+          data: p50,
+          borderColor: "#0f766e",
+          borderWidth: 2.5,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: "P90",
+          data: p90,
+          borderColor: "#2563eb",
+          borderWidth: 1.2,
+          pointRadius: 0,
+          fill: "-1",
+          backgroundColor: "rgba(37,99,235,0.10)",
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
+        },
+      },
+    };
+
+    if (!mcSpendPercentileChartInst) {
+      mcSpendPercentileChartInst = new Chart(
+        document.getElementById("mcSpendPercentileChart").getContext("2d"),
+        {
+          type: "line",
+          data,
+          options,
+        },
+      );
+      return;
+    }
+
+    mcSpendPercentileChartInst.data = data;
+    mcSpendPercentileChartInst.options = options;
+    mcSpendPercentileChartInst.update("none");
+  }
+
   async function calculateRetirement(runMonteCarloNow = true) {
     if (recalcTimer) {
       clearTimeout(recalcTimer);
@@ -573,6 +697,11 @@ document.addEventListener("DOMContentLoaded", () => {
           assetP50,
           assetP75,
           assetP90,
+          spendP10,
+          spendP25,
+          spendP50,
+          spendP75,
+          spendP90,
         ) => {
           if (runStatusEl) {
             const pct = ((done / total) * 100).toFixed(0);
@@ -591,6 +720,11 @@ document.addEventListener("DOMContentLoaded", () => {
             assetP50,
             assetP75,
             assetP90,
+            spendP10,
+            spendP25,
+            spendP50,
+            spendP75,
+            spendP90,
           });
           renderMonteCarloPercentileChart({
             trials: done,
@@ -604,6 +738,19 @@ document.addEventListener("DOMContentLoaded", () => {
             assetP50,
             assetP75,
             assetP90,
+          });
+          renderMonteCarloSpendPercentileChart({
+            trials: done,
+            requestedTrials: total,
+            cancelled: false,
+            bucketLabels,
+            bucketCounts,
+            ageLabels,
+            spendP10,
+            spendP25,
+            spendP50,
+            spendP75,
+            spendP90,
           });
         },
         shouldCancel: () => mcCancelRequested,
@@ -655,6 +802,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const spendingEl = document.getElementById("spending");
         if (spendingEl)
           spendingEl.value = Math.round(outcome.solvedSpendOutput);
+      } else if (outcome.spendingMode === "rolling-amortization") {
+        const firstYearSpendValue = document.getElementById(
+          "firstYearSpendValue",
+        );
+        if (firstYearSpendValue)
+          firstYearSpendValue.innerText = formatCurrency(
+            outcome.currentYearSpending,
+          );
       }
       if (
         outcome.monteCarloResults &&
@@ -715,6 +870,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const defaultOpen = {
       "Basic Info & Taxes": false,
+      "Spending Policy": true,
       "Current Assets ($)": false,
       "Canada Pension Plan (CPP)": false,
       "Old Age Security (OAS)": false,
@@ -766,6 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = document.getElementById("spendingMode").value;
     const targetEl = document.getElementById("targetSuccessGroup");
     const precisionEl = document.getElementById("solvePrecisionGroup");
+    const amortizationEl = document.getElementById("amortizationRateGroup");
     const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
@@ -773,9 +930,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const spendingInput = document.getElementById("spending");
     const spendingLabel = document.getElementById("spendingLabel");
     const spendingInputGroup = document.getElementById("spendingInputGroup");
+    const firstYearSpendSummary = document.getElementById(
+      "firstYearSpendSummary",
+    );
     const spendingHelp = document.getElementById("spendingModeHelp");
     const toggle = document.getElementById("spendingModeToggle");
-    const visible = mode === "solve";
+    const isSolveMode = mode === "solve";
+    const isRollingMode = mode === "rolling-amortization";
+    const usesManagedSpend = isSolveMode || isRollingMode;
 
     if (toggle) {
       toggle.querySelectorAll("button[data-mode]").forEach((btn) => {
@@ -783,28 +945,40 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    if (targetEl) targetEl.style.display = visible ? "block" : "none";
-    if (precisionEl) precisionEl.style.display = visible ? "block" : "none";
-    if (scheduleGroup) scheduleGroup.style.display = visible ? "none" : "block";
-    if (scheduleWrap) scheduleWrap.style.display = visible ? "none" : "block";
+    if (targetEl) targetEl.style.display = isSolveMode ? "block" : "none";
+    if (precisionEl) precisionEl.style.display = isSolveMode ? "block" : "none";
+    if (amortizationEl)
+      amortizationEl.style.display = isRollingMode ? "block" : "none";
+    if (scheduleGroup)
+      scheduleGroup.style.display = usesManagedSpend ? "none" : "block";
+    if (scheduleWrap)
+      scheduleWrap.style.display = usesManagedSpend ? "none" : "block";
     if (scheduleNote) scheduleNote.style.display = "none";
     if (scheduleStatus)
-      scheduleStatus.style.display = visible ? "none" : "block";
+      scheduleStatus.style.display = usesManagedSpend ? "none" : "block";
+    if (spendingInputGroup)
+      spendingInputGroup.style.display = isRollingMode ? "none" : "grid";
+    if (firstYearSpendSummary)
+      firstYearSpendSummary.style.display = isRollingMode ? "block" : "none";
     if (spendingInput) {
-      spendingInput.readOnly = visible;
-      spendingInput.style.backgroundColor = visible ? "#f1f5f9" : "#fff";
-      spendingInput.style.cursor = visible ? "not-allowed" : "text";
+      spendingInput.readOnly = isSolveMode;
+      spendingInput.style.backgroundColor = isSolveMode ? "#f1f5f9" : "#fff";
+      spendingInput.style.cursor = isSolveMode ? "not-allowed" : "text";
     }
     if (spendingLabel)
-      spendingLabel.innerText = visible
+      spendingLabel.innerText = isSolveMode
         ? "Solved Net Spend/Yr"
-        : "Desired Net Spend/Yr";
+        : isRollingMode
+          ? "Rolling Net Spend/Yr"
+          : "Desired Net Spend/Yr";
     if (spendingInputGroup)
-      spendingInputGroup.style.opacity = visible ? "0.9" : "1";
+      spendingInputGroup.style.opacity = isSolveMode ? "0.9" : "1";
     if (spendingHelp)
-      spendingHelp.innerText = visible
+      spendingHelp.innerText = isSolveMode
         ? "Solves a flat spend to hit your MC success target."
-        : "Uses your entered spend.";
+        : isRollingMode
+          ? "Recomputes annual spend from remaining assets, remaining years, and the amortization rate. Monte Carlo negative-return spending cuts are ignored in this mode."
+          : "Uses your entered spend.";
   }
 
   function replaceWithFlatScheduleFromCurrentSpend(spendOverride = null) {
@@ -855,6 +1029,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("mcSummary").innerHTML = "";
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
       const debugEl = document.getElementById("debugSummary");
       if (debugEl) {
         debugEl.style.display = "none";
@@ -1001,9 +1176,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (monteCarloEnabled) {
       renderMonteCarloOutcomeChart(monteCarloResults);
       renderMonteCarloPercentileChart(monteCarloResults);
+      renderMonteCarloSpendPercentileChart(monteCarloResults);
     } else {
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
     }
 
     const debugMode = document.getElementById("debugMode").value;
@@ -1300,7 +1477,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const prevMode = modeInput.value;
       modeInput.value = btn.dataset.mode;
 
-      if (prevMode === "input" && modeInput.value === "solve") {
+      if (prevMode === "input" && modeInput.value !== "input") {
         const spendEl = document.getElementById("spending");
         const val = spendEl ? parseFloat(spendEl.value) : NaN;
         desiredSpendBeforeSolve = Number.isFinite(val)
@@ -1308,16 +1485,18 @@ document.addEventListener("DOMContentLoaded", () => {
           : desiredSpendBeforeSolve;
       }
 
-      if (prevMode === "solve" && modeInput.value === "input") {
+      if (prevMode !== "input" && modeInput.value === "input") {
         const spendEl = document.getElementById("spending");
-        const solvedSpend = Number.isFinite(lastSolvedSpend)
-          ? lastSolvedSpend
-          : parseFloat(spendEl?.value) || 0;
+        const solvedSpend =
+          prevMode === "solve" && Number.isFinite(lastSolvedSpend)
+            ? lastSolvedSpend
+            : parseFloat(spendEl?.value) || 0;
         const desiredSpend = Number.isFinite(desiredSpendBeforeSolve)
           ? desiredSpendBeforeSolve
           : solvedSpend;
 
         if (
+          prevMode === "solve" &&
           spendEl &&
           Number.isFinite(solvedSpend) &&
           Math.round(desiredSpend) !== Math.round(solvedSpend)

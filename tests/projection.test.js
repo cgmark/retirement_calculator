@@ -204,4 +204,37 @@ describe("runDeterministicProjection", () => {
     expect(results[0].nonreg).toBeCloseTo(59626.78136090365, 6);
     expect(results[0].total).toBeCloseTo(571674.9222430347, 6);
   });
+
+  it("recomputes rolling amortized spending from remaining assets and years", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 60,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 1000000,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 61,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+      spendingMode: "rolling-amortization",
+      amortizationRate: 0.03,
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].spending).toBeCloseTo(507389.1625615762, 6);
+    expect(results[0].drawTFSA).toBeCloseTo(507389.1625615762, 6);
+    expect(results[1].spending).toBeCloseTo(492610.83743842406, 6);
+    expect(results[1].drawTFSA).toBeCloseTo(492610.8374384238, 6);
+    expect(results[1].spending).toBeLessThan(results[0].spending);
+  });
 });

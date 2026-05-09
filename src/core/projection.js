@@ -5,7 +5,7 @@ import {
   TFSA_ANNUAL_ROOM_BASE,
 } from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
-import { getBaseSpendingForAge } from "./spending.js";
+import { getTargetSpendingForYear } from "./spendingPolicy.js";
 import {
   applyProportionalDraw,
   applySequenceDraw,
@@ -36,6 +36,8 @@ export async function runDeterministicProjection(params) {
     rrifStartAge,
     enforceRrifMin,
     effectiveStrategy,
+    spendingMode = "input",
+    amortizationRate = 0,
   } = params;
 
   let rrsp = rrspStart;
@@ -51,12 +53,17 @@ export async function runDeterministicProjection(params) {
   for (let i = 0; age + i <= lifeExpectancy; i++) {
     const currentAge = age + i;
     const inflationFactor = Math.pow(1 + yearlyInflation, i);
-    const ageBaseSpending = getBaseSpendingForAge(
+    const startingTotalPortfolio = rrsp + tfsa + nonreg;
+    const targetSpending = getTargetSpendingForYear({
+      spendingMode,
       currentAge,
+      projectionAge: lifeExpectancy,
       baseSpending,
-      activeSchedule,
-    );
-    const targetSpending = ageBaseSpending * inflationFactor;
+      schedule: activeSchedule,
+      inflationFactor,
+      totalPortfolio: startingTotalPortfolio,
+      amortizationRate,
+    });
 
     let totalIncomeTaxThisYear = 0;
     let oasClawbackThisYear = 0;
