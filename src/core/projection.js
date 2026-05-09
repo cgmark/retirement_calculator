@@ -39,6 +39,8 @@ export async function runDeterministicProjection(params) {
     spendingMode = "input",
     amortizationRate = 0,
     targetEstateValue = 0,
+    rollingMinSpend = 0,
+    rollingMaxSpend = 0,
   } = params;
 
   let rrsp = rrspStart;
@@ -65,6 +67,8 @@ export async function runDeterministicProjection(params) {
       totalPortfolio: startingTotalPortfolio,
       amortizationRate,
       targetEstateValue,
+      rollingMinSpend,
+      rollingMaxSpend,
     });
 
     let totalIncomeTaxThisYear = 0;

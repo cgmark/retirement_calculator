@@ -37,6 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "spendingMode",
     "amortizationRate",
     "targetEstateValue",
+    "rollingMinSpend",
+    "rollingMaxSpend",
     "targetSuccess",
     "solvePrecision",
     "lifeExpectancy",
@@ -102,6 +104,8 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("spending", inputs.baseSpending);
       setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
       setInputValueIfChanged("targetEstateValue", inputs.targetEstateValue);
+      setInputValueIfChanged("rollingMinSpend", inputs.rollingMinSpend);
+      setInputValueIfChanged("rollingMaxSpend", inputs.rollingMaxSpend);
       setInputValueIfChanged("targetSuccess", inputs.targetSuccessRate * 100);
       setInputValueIfChanged("solvePrecision", inputs.solvePrecision);
       setInputValueIfChanged("lifeExpectancy", inputs.lifeExpectancy);
@@ -934,6 +938,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const precisionEl = document.getElementById("solvePrecisionGroup");
     const amortizationEl = document.getElementById("amortizationRateGroup");
     const targetEstateEl = document.getElementById("targetEstateValueGroup");
+    const minSpendEl = document.getElementById("rollingMinSpendGroup");
+    const maxSpendEl = document.getElementById("rollingMaxSpendGroup");
     const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
@@ -961,6 +967,8 @@ document.addEventListener("DOMContentLoaded", () => {
       amortizationEl.style.display = isRollingMode ? "block" : "none";
     if (targetEstateEl)
       targetEstateEl.style.display = isRollingMode ? "block" : "none";
+    if (minSpendEl) minSpendEl.style.display = isRollingMode ? "block" : "none";
+    if (maxSpendEl) maxSpendEl.style.display = isRollingMode ? "block" : "none";
     if (scheduleGroup) scheduleGroup.style.display = "block";
     if (scheduleWrap)
       scheduleWrap.style.display = isSolveMode ? "none" : "block";
@@ -989,7 +997,7 @@ document.addEventListener("DOMContentLoaded", () => {
       spendingHelp.innerText = isSolveMode
         ? "Solves a flat spend to hit your MC success target."
         : isRollingMode
-          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value. Monte Carlo negative-return spending cuts are ignored in this mode."
+          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value, then applies your min/max spend bounds. Monte Carlo negative-return spending cuts are ignored in this mode."
           : "Uses your entered spend.";
     if (scheduleNote)
       scheduleNote.innerText =

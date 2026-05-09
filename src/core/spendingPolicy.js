@@ -32,6 +32,8 @@ export function getTargetSpendingForYear({
   totalPortfolio,
   amortizationRate = 0,
   targetEstateValue = 0,
+  rollingMinSpend = 0,
+  rollingMaxSpend = 0,
 }) {
   if (spendingMode === "rolling-amortization") {
     const remainingYears = Math.max(1, projectionAge - currentAge + 1);
@@ -44,7 +46,14 @@ export function getTargetSpendingForYear({
       realTargetEstate,
     );
     const multiplier = getScheduleMultiplierForAge(currentAge, schedule);
-    return realSpend * inflationFactor * multiplier;
+    const targetSpend = realSpend * inflationFactor * multiplier;
+    const minSpend = Math.max(0, rollingMinSpend) * inflationFactor;
+    const maxSpendValue = Math.max(0, rollingMaxSpend);
+    const maxSpend =
+      maxSpendValue > 0
+        ? Math.max(minSpend, maxSpendValue * inflationFactor)
+        : Infinity;
+    return Math.max(minSpend, Math.min(targetSpend, maxSpend));
   }
 
   const ageBaseSpending = getBaseSpendingForAge(currentAge, baseSpending, []);

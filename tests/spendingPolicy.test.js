@@ -66,4 +66,36 @@ describe("spending policy helpers", () => {
 
     expect(target).toBeCloseTo(91052.82066420157, 6);
   });
+
+  it("applies rolling min spend floor in today's dollars", () => {
+    const target = getTargetSpendingForYear({
+      spendingMode: "rolling-amortization",
+      currentAge: 60,
+      projectionAge: 89,
+      baseSpending: 60000,
+      schedule: [],
+      inflationFactor: 1.2,
+      totalPortfolio: 500000,
+      amortizationRate: 0.03,
+      rollingMinSpend: 50000,
+    });
+
+    expect(target).toBe(60000);
+  });
+
+  it("applies rolling max spend cap in today's dollars", () => {
+    const target = getTargetSpendingForYear({
+      spendingMode: "rolling-amortization",
+      currentAge: 60,
+      projectionAge: 89,
+      baseSpending: 60000,
+      schedule: [],
+      inflationFactor: 1.1,
+      totalPortfolio: 3000000,
+      amortizationRate: 0.03,
+      rollingMaxSpend: 70000,
+    });
+
+    expect(target).toBe(77000);
+  });
 });

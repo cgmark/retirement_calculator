@@ -532,6 +532,31 @@
                   step="1000"
                 />
               </div>
+              <div class="form-group" id="rollingMinSpendGroup">
+                <label>Minimum Spend Floor ($, today's dollars)</label
+                ><input
+                  type="number"
+                  id="rollingMinSpend"
+                  value="0"
+                  min="0"
+                  step="1000"
+                />
+              </div>
+              <div class="form-group" id="rollingMaxSpendGroup">
+                <label>Maximum Spend Cap ($, today's dollars)</label
+                ><input
+                  type="number"
+                  id="rollingMaxSpend"
+                  value="0"
+                  min="0"
+                  step="1000"
+                />
+                <div
+                  style="margin-top: 4px; font-size: 0.78rem; color: #64748b"
+                >
+                  Set to 0 for no cap.
+                </div>
+              </div>
               <div
                 class="form-group"
                 id="spendingScheduleGroup"

@@ -13,6 +13,8 @@ export const SCENARIO_INPUT_DEFAULTS = {
   growthPct: 5.5,
   amortizationRatePct: 3.0,
   targetEstateValue: 0,
+  rollingMinSpend: 0,
+  rollingMaxSpend: 0,
   cppScenarioAge: 65,
   cppMonthly: 0,
   oasPercent: 100,
@@ -59,6 +61,18 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     0,
     readFloat("targetEstateValue", SCENARIO_INPUT_DEFAULTS.targetEstateValue),
   );
+  const rollingMinSpend = Math.max(
+    0,
+    readFloat("rollingMinSpend", SCENARIO_INPUT_DEFAULTS.rollingMinSpend),
+  );
+  const rollingMaxSpendRaw = Math.max(
+    0,
+    readFloat("rollingMaxSpend", SCENARIO_INPUT_DEFAULTS.rollingMaxSpend),
+  );
+  const rollingMaxSpend =
+    rollingMaxSpendRaw > 0
+      ? Math.max(rollingMinSpend, rollingMaxSpendRaw)
+      : rollingMaxSpendRaw;
   const targetSuccessRate = Math.max(
     0.5,
     Math.min(
@@ -153,6 +167,8 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     spendingMode,
     amortizationRate,
     targetEstateValue,
+    rollingMinSpend,
+    rollingMaxSpend,
     targetSuccessRate,
     solvePrecision,
     lifeExpectancy,
