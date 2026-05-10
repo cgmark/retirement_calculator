@@ -501,6 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
       scales: {
         y: {
           beginAtZero: true,
+          min: 0,
           ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
         },
       },
@@ -622,6 +623,8 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       scales: {
         y: {
+          beginAtZero: true,
+          min: 0,
           ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
         },
       },
