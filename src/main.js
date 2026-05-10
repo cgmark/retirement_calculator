@@ -872,6 +872,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const enabled = document.getElementById("enableMonteCarlo").checked;
     const box = document.getElementById("mcSettingsBox");
     if (box) box.style.display = enabled ? "block" : "none";
+    if (!enabled) {
+      renderMonteCarloOutcomeChart(null);
+      renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
+      return;
+    }
+
+    if (lastMonteCarloResults) {
+      renderMonteCarloOutcomeChart(lastMonteCarloResults);
+      renderMonteCarloPercentileChart(lastMonteCarloResults);
+      renderMonteCarloSpendPercentileChart(lastMonteCarloResults);
+    }
   }
 
   function setupCollapsibleSections() {
@@ -1076,8 +1088,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       document.getElementById("tableBody").innerHTML = "";
       document.getElementById("summaryGrid").innerHTML = "";
-      document.getElementById("mcSummary").style.display = "none";
-      document.getElementById("mcSummary").innerHTML = "";
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
@@ -1635,7 +1645,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el)
       el.addEventListener("change", () => {
         if (suppressInputChangeRecalc) return;
-        if (id === "enableMonteCarlo") updateMonteCarloSettingsVisibility();
+        if (id === "enableMonteCarlo") {
+          updateMonteCarloSettingsVisibility();
+          saveInputs();
+          return;
+        }
         if (id === "spendingMode") updateSpendingModeVisibility();
 
         if (id === "age" || id === "lifeExpectancy") {
