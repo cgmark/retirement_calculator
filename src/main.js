@@ -75,6 +75,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }).format(num);
   };
 
+  function setRunButtonState({ running = false } = {}) {
+    const runBtn = document.getElementById("calcBtn");
+    if (!runBtn) return;
+    runBtn.disabled = false;
+    if (!running) {
+      runBtn.innerText = "Run Simulation";
+      runBtn.style.backgroundColor = "";
+      return;
+    }
+    runBtn.innerText = "Stop Simulation";
+    runBtn.style.backgroundColor = "#b91c1c";
+  }
+
   const readUiInt = (id, fallback) => {
     const value = parseInt(document.getElementById(id)?.value);
     return Number.isFinite(value) ? value : fallback;
@@ -659,19 +672,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     isRecalculating = true;
     const runStatusEl = document.getElementById("runStatus");
-    const runBtn = document.getElementById("calcBtn");
-    const stopBtn = document.getElementById("stopBtn");
 
     try {
       const inputs = readScenarioInputs(document, getValidatedSpendingSchedule);
       syncInputsToForm(inputs);
       saveInputs();
 
-      if (runBtn) {
-        runBtn.disabled = false;
-        runBtn.innerText = "Run Simulation";
-      }
-      if (stopBtn) stopBtn.style.display = "none";
+      setRunButtonState({ running: false });
 
       const outcome = await runRetirementCalculation({
         inputs,
@@ -693,15 +700,11 @@ document.addEventListener("DOMContentLoaded", () => {
         onMonteCarloStart: (trials) => {
           if (runStatusEl) {
             runStatusEl.style.color = "#0369a1";
-            runStatusEl.innerText = `Running Monte Carlo (${trials.toLocaleString()} trials)...`;
+            runStatusEl.innerText = `Running simulation (${trials.toLocaleString()} trials)...`;
           }
-          if (runBtn) {
-            runBtn.disabled = true;
-            runBtn.innerText = "Running...";
-          }
-          if (stopBtn) stopBtn.style.display = "block";
           mcCancelRequested = false;
           mcIsRunning = true;
+          setRunButtonState({ running: true });
         },
         onMonteCarloProgress: (
           done,
@@ -722,7 +725,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ) => {
           if (runStatusEl) {
             const pct = ((done / total) * 100).toFixed(0);
-            runStatusEl.innerText = `Running Monte Carlo: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
+            runStatusEl.innerText = `Running simulation: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
+            setRunButtonState({ running: true });
           }
           renderMonteCarloOutcomeChart({
             // Render partial MC snapshots so users can see convergence in real time.
@@ -774,16 +778,12 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       mcIsRunning = false;
-      if (runBtn) {
-        runBtn.disabled = false;
-        runBtn.innerText = "Run Simulation";
-      }
-      if (stopBtn) stopBtn.style.display = "none";
+      setRunButtonState({ running: false });
 
       if (outcome.shouldPromptEnableMcForSolve && runStatusEl) {
         runStatusEl.style.color = "#b45309";
         runStatusEl.innerText =
-          "Enable Monte Carlo to solve sustainable spending.";
+          "Enable simulation to solve sustainable spending.";
       } else if (outcome.solveFailed && runStatusEl) {
         runStatusEl.style.color = "#b45309";
         runStatusEl.innerText =
@@ -796,10 +796,10 @@ document.addEventListener("DOMContentLoaded", () => {
       ) {
         if (outcome.monteCarloResults.cancelled) {
           runStatusEl.style.color = "#b45309";
-          runStatusEl.innerText = `Monte Carlo cancelled after ${outcome.monteCarloResults.trials.toLocaleString()} / ${outcome.monteCarloResults.requestedTrials.toLocaleString()} trials.`;
+          runStatusEl.innerText = `Simulation cancelled after ${outcome.monteCarloResults.trials.toLocaleString()} / ${outcome.monteCarloResults.requestedTrials.toLocaleString()} trials.`;
         } else {
           runStatusEl.style.color = "#166534";
-          runStatusEl.innerText = `Monte Carlo complete: ${(outcome.monteCarloResults.successRate * 100).toFixed(1)}% success over ${outcome.monteCarloResults.trials.toLocaleString()} trials.`;
+          runStatusEl.innerText = `Simulation complete: ${(outcome.monteCarloResults.successRate * 100).toFixed(1)}% success over ${outcome.monteCarloResults.trials.toLocaleString()} trials.`;
         }
       } else if (
         outcome.enableMonteCarlo &&
@@ -808,7 +808,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ) {
         runStatusEl.style.color = "#64748b";
         runStatusEl.innerText =
-          "Monte Carlo inputs changed. Click Run Simulation to refresh probability results.";
+          "Simulation inputs changed. Click Run Simulation to refresh probability results.";
       } else if (runStatusEl) {
         runStatusEl.style.color = "#64748b";
         runStatusEl.innerText = "Deterministic mode ready.";
@@ -872,6 +872,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const enabled = document.getElementById("enableMonteCarlo").checked;
     const box = document.getElementById("mcSettingsBox");
     if (box) box.style.display = enabled ? "block" : "none";
+    if (!enabled) {
+      renderMonteCarloOutcomeChart(null);
+      renderMonteCarloPercentileChart(null);
+      renderMonteCarloSpendPercentileChart(null);
+      return;
+    }
+
+    if (lastMonteCarloResults) {
+      renderMonteCarloOutcomeChart(lastMonteCarloResults);
+      renderMonteCarloPercentileChart(lastMonteCarloResults);
+      renderMonteCarloSpendPercentileChart(lastMonteCarloResults);
+    }
   }
 
   function setupCollapsibleSections() {
@@ -893,7 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Old Age Security (OAS)": false,
       "RRIF Minimum Withdrawals": false,
       "Withdrawal Strategy": true,
-      "Monte Carlo Simulation": true,
+      Simulation: true,
       "Display Options": false,
     };
 
@@ -931,6 +943,54 @@ document.addEventListener("DOMContentLoaded", () => {
             JSON.stringify(saved),
           );
         } catch {}
+      });
+    });
+  }
+
+  function setupResultsCollapsibleCards() {
+    let saved = {};
+    try {
+      saved = JSON.parse(
+        localStorage.getItem("retirePlanner_resultsCardState") || "{}",
+      );
+    } catch {
+      saved = {};
+    }
+
+    const cards = Array.from(
+      document.querySelectorAll(".result-card.collapsible"),
+    );
+    cards.forEach((card) => {
+      const heading = card.querySelector(":scope > h3");
+      const body = card.querySelector(":scope > .result-body");
+      if (!heading || !body) return;
+
+      const key = card.id || heading.textContent.trim();
+      const isOpen = Object.prototype.hasOwnProperty.call(saved, key)
+        ? !!saved[key]
+        : true;
+
+      body.style.display = isOpen ? "block" : "none";
+      card.classList.toggle("collapsed", !isOpen);
+
+      heading.addEventListener("click", () => {
+        const nowOpen = card.classList.contains("collapsed");
+        card.classList.toggle("collapsed", !nowOpen);
+        body.style.display = nowOpen ? "block" : "none";
+        saved[key] = nowOpen;
+        try {
+          localStorage.setItem(
+            "retirePlanner_resultsCardState",
+            JSON.stringify(saved),
+          );
+        } catch {}
+        if (nowOpen) {
+          balanceChartInst?.resize();
+          incomeChartInst?.resize();
+          mcOutcomeChartInst?.resize();
+          mcPercentileChartInst?.resize();
+          mcSpendPercentileChartInst?.resize();
+        }
       });
     });
   }
@@ -998,9 +1058,9 @@ document.addEventListener("DOMContentLoaded", () => {
       spendingInputGroup.style.opacity = isSolveMode ? "0.9" : "1";
     if (spendingHelp)
       spendingHelp.innerText = isSolveMode
-        ? "Solves a flat spend to hit your MC success target."
+        ? "Solves a flat spend to hit your simulation success target."
         : isRollingMode
-          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value, then applies your min/max spend bounds. Monte Carlo negative-return spending cuts are ignored in this mode."
+          ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value, then applies your min/max spend bounds. Simulation negative-return spending cuts are ignored in this mode."
           : "Uses your entered spend.";
     if (scheduleNote)
       scheduleNote.innerText =
@@ -1028,8 +1088,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       document.getElementById("tableBody").innerHTML = "";
       document.getElementById("summaryGrid").innerHTML = "";
-      document.getElementById("mcSummary").style.display = "none";
-      document.getElementById("mcSummary").innerHTML = "";
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
@@ -1056,8 +1114,8 @@ document.addEventListener("DOMContentLoaded", () => {
       `Asset Balances Over Time ${strSuffix}${mcSuffix}`;
     document.getElementById("chart2Title").innerText =
       `Gross Income Sources vs Net Target ${strSuffix}${mcSuffix}`;
-    document.getElementById("tableSubtitle").innerText = strSuffix;
-    document.getElementById("summarySubtitle").innerText = strSuffix;
+    document.getElementById("tableSubtitle").innerText = "";
+    document.getElementById("summarySubtitle").innerText = "";
 
     // --- TABLE ---
     const tbody = document.getElementById("tableBody");
@@ -1155,8 +1213,7 @@ document.addEventListener("DOMContentLoaded", () => {
         spendingMode === "solve" && solvedSpendOutput !== null
           ? `Solved sustainable spend (today's dollars): ${formatCurrency(solvedSpendOutput)} at ${(targetSuccessRate * 100).toFixed(0)}% target success`
           : "";
-      mcEl.innerHTML = [
-        "<strong>Monte Carlo Summary:</strong>",
+      const mcSummaryLines = [
         `Trials completed: ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()}`,
         `Success probability: ${(monteCarloResults.successRate * 100).toFixed(1)}%`,
         `Failure probability: ${(failRate * 100).toFixed(1)}%`,
@@ -1169,11 +1226,25 @@ document.addEventListener("DOMContentLoaded", () => {
         solvedLine,
         partialLine,
         staleLine,
-      ].join("<br>");
-      mcEl.style.display = "block";
+      ];
+
+      if (mcEl) {
+        mcEl.style.display = "none";
+        mcEl.innerHTML = "";
+      }
+
+      console.info(
+        "Simulation Summary:\n" +
+          mcSummaryLines
+            .map((line) => String(line).replace(/<[^>]*>/g, ""))
+            .filter((line) => line.trim().length > 0)
+            .join("\n"),
+      );
     } else {
-      mcEl.style.display = "none";
-      mcEl.innerHTML = "";
+      if (mcEl) {
+        mcEl.style.display = "none";
+        mcEl.innerHTML = "";
+      }
     }
 
     if (monteCarloEnabled) {
@@ -1465,6 +1536,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- INITIALIZATION ---
   setupCollapsibleSections();
+  setupResultsCollapsibleCards();
   loadInputs();
   loadSpendingSchedule();
   updateMonteCarloSettingsVisibility();
@@ -1573,7 +1645,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el)
       el.addEventListener("change", () => {
         if (suppressInputChangeRecalc) return;
-        if (id === "enableMonteCarlo") updateMonteCarloSettingsVisibility();
+        if (id === "enableMonteCarlo") {
+          updateMonteCarloSettingsVisibility();
+          saveInputs();
+          return;
+        }
         if (id === "spendingMode") updateSpendingModeVisibility();
 
         if (id === "age" || id === "lifeExpectancy") {
@@ -1595,19 +1671,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Bind the button
   const runBtn = document.getElementById("calcBtn");
-  if (runBtn) runBtn.addEventListener("click", () => calculateRetirement(true));
-  const stopBtn = document.getElementById("stopBtn");
-  if (stopBtn) {
-    stopBtn.addEventListener("click", () => {
+  if (runBtn)
+    runBtn.addEventListener("click", () => {
       if (!mcIsRunning) return;
       mcCancelRequested = true;
       const runStatusEl = document.getElementById("runStatus");
       if (runStatusEl) {
         runStatusEl.style.color = "#b45309";
-        runStatusEl.innerText = "Stopping Monte Carlo after current batch...";
+        runStatusEl.innerText = "Stopping simulation after current batch...";
       }
+      return;
     });
-  }
+  if (runBtn)
+    runBtn.addEventListener("click", () => {
+      if (mcIsRunning) return;
+      calculateRetirement(true);
+    });
 
   calculateRetirement(false);
 });
