@@ -31,8 +31,9 @@
       }
 
       .container {
-        max-width: 1400px;
-        margin: 0 auto;
+        width: 100%;
+        max-width: none;
+        margin: 0;
       }
       h1 {
         text-align: center;
@@ -42,9 +43,10 @@
 
       .dashboard {
         display: grid;
-        grid-template-columns: 420px 1fr;
+        grid-template-columns: 420px minmax(0, 1fr);
         gap: 20px;
         margin-bottom: 20px;
+        align-items: start;
       }
 
       .inputs-column {
@@ -70,6 +72,13 @@
         display: flex;
         flex-direction: column;
         gap: 20px;
+        min-width: 0;
+      }
+      .charts-container .card {
+        min-width: 0;
+      }
+      #summaryCard {
+        order: -100;
       }
       .chart-wrapper {
         position: relative;
@@ -140,6 +149,16 @@
       .form-group {
         margin-bottom: 12px;
       }
+      .inline-field {
+        margin-bottom: 0;
+        display: grid;
+        grid-template-columns: 1fr 120px;
+        gap: 10px;
+        align-items: center;
+      }
+      .inline-field label {
+        margin-bottom: 0;
+      }
       .input-section.collapsible h4 {
         cursor: pointer;
         user-select: none;
@@ -153,6 +172,21 @@
         color: #64748b;
       }
       .input-section.collapsible.collapsed h4::after {
+        content: "\25B8";
+      }
+      .result-card.collapsible > h3 {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .result-card.collapsible > h3::after {
+        content: "\25BE";
+        font-size: 0.75rem;
+        color: #64748b;
+      }
+      .result-card.collapsible.collapsed > h3::after {
         content: "\25B8";
       }
 
@@ -324,13 +358,6 @@
         <div class="inputs-column">
           <div class="card run-controls-card" style="padding: 14px">
             <button id="calcBtn" style="margin-top: 0">Run Simulation</button>
-            <button
-              id="stopBtn"
-              type="button"
-              style="display: none; margin-top: 6px; background: #b91c1c"
-            >
-              Stop Simulation
-            </button>
             <div
               id="runStatus"
               style="
@@ -347,45 +374,17 @@
             <div class="input-section">
               <h4>Basic Info & Taxes</h4>
               <div style="display: grid; grid-template-columns: 1fr; gap: 8px">
-                <div
-                  class="form-group"
-                  style="
-                    margin-bottom: 0;
-                    display: grid;
-                    grid-template-columns: 1fr 110px;
-                    gap: 10px;
-                    align-items: center;
-                  "
-                >
-                  <label style="margin-bottom: 0">Current Age</label>
+                <div class="form-group inline-field">
+                  <label>Current Age</label>
                   <input type="number" id="age" value="60" />
                 </div>
-                <div
-                  class="form-group"
-                  style="
-                    margin-bottom: 0;
-                    display: grid;
-                    grid-template-columns: 1fr 110px;
-                    gap: 10px;
-                    align-items: center;
-                  "
-                >
-                  <label style="margin-bottom: 0">Retirement Age</label>
+                <div class="form-group inline-field">
+                  <label>Retirement Age</label>
                   <input type="number" id="retirementAge" value="65" />
                 </div>
-                <div
-                  class="form-group"
-                  style="
-                    margin-bottom: 0;
-                    display: grid;
-                    grid-template-columns: 1fr 110px;
-                    gap: 10px;
-                    align-items: center;
-                  "
-                >
+                <div class="form-group inline-field">
                   <label
                     title="How long the plan should last. The simulation runs from your current age to this age."
-                    style="margin-bottom: 0"
                     >Life Expectancy (Age)</label
                   >
                   <input
@@ -396,46 +395,33 @@
                     max="120"
                   />
                 </div>
-              </div>
-              <div
-                class="form-group"
-                style="
-                  margin-bottom: 12px;
-                  display: grid;
-                  grid-template-columns: 1fr 110px;
-                  gap: 10px;
-                  align-items: center;
-                "
-              >
-                <label style="margin-bottom: 0"
-                  >Gross Employment Income/Yr</label
-                >
-                <input type="number" id="grossEmploymentIncome" value="0" />
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Inflation Rate (%)</label
-                  ><input type="number" id="inflation" value="2.5" step="0.1" />
+                <div class="form-group inline-field">
+                  <label>Gross Employment Income/Yr</label>
+                  <input type="number" id="grossEmploymentIncome" value="0" />
                 </div>
-                <div class="form-group">
-                  <label>Invest Growth (%)</label
-                  ><input type="number" id="growth" value="5.5" step="0.1" />
+                <div class="form-group inline-field">
+                  <label>Inflation Rate (%)</label>
+                  <input type="number" id="inflation" value="2.5" step="0.1" />
                 </div>
-              </div>
-              <div class="form-group">
-                <label>Province of Residence (2024 Tax Brackets)</label>
-                <select id="province">
-                  <option value="ON" selected>Ontario</option>
-                  <option value="BC">British Columbia</option>
-                  <option value="AB">Alberta</option>
-                  <option value="QC">Quebec (Simplified)</option>
-                  <option value="MB">Manitoba</option>
-                  <option value="SK">Saskatchewan</option>
-                  <option value="NS">Nova Scotia</option>
-                  <option value="NB">New Brunswick</option>
-                  <option value="NL">Newfoundland & Labrador</option>
-                  <option value="PE">Prince Edward Island</option>
-                </select>
+                <div class="form-group inline-field">
+                  <label>Invest Growth (%)</label>
+                  <input type="number" id="growth" value="5.5" step="0.1" />
+                </div>
+                <div class="form-group inline-field">
+                  <label>Province of Residence (2024 Tax Brackets)</label>
+                  <select id="province">
+                    <option value="ON" selected>ON</option>
+                    <option value="BC">BC</option>
+                    <option value="AB">AB</option>
+                    <option value="QC">QC (Simplified)</option>
+                    <option value="MB">MB</option>
+                    <option value="SK">SK</option>
+                    <option value="NS">NS</option>
+                    <option value="NB">NB</option>
+                    <option value="NL">NL</option>
+                    <option value="PE">PE</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -443,7 +429,7 @@
               <h4>Spending Policy</h4>
               <div class="form-group">
                 <div class="form-group">
-                  <label>Spending Mode</label>
+                  <label>Mode</label>
                   <div class="segmented-toggle" id="spendingModeToggle">
                     <button type="button" data-mode="input" class="active">
                       Desired
@@ -490,7 +476,7 @@
                 >
               </div>
               <div class="form-group" id="targetSuccessGroup">
-                <label>Target MC Success (%)</label
+                <label>Target Simulation Success (%)</label
                 ><input
                   type="number"
                   id="targetSuccess"
@@ -772,7 +758,7 @@
             </div>
 
             <div class="input-section" id="mcSection">
-              <h4 style="margin-bottom: 10px">Monte Carlo Simulation</h4>
+              <h4 style="margin-bottom: 10px">Simulation</h4>
               <div class="form-group" style="margin-top: 10px">
                 <label
                   style="
@@ -816,7 +802,7 @@
                     for="mcTrials"
                     title="How many random futures to test. More trials are smoother but slower."
                     style="display: inline-block; width: 68%; margin-bottom: 0"
-                    >MC Trials</label
+                    >Simulation Trials</label
                   ><input
                     type="number"
                     id="mcTrials"
@@ -945,66 +931,46 @@
 
         <!-- Charts Column -->
         <div class="charts-container">
-          <div class="card">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart1Title"
-            >
-              Asset Balances Over Time
-            </h3>
-            <div class="chart-wrapper"><canvas id="balanceChart"></canvas></div>
-          </div>
-          <div class="card">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart2Title"
-            >
-              Gross Income Sources vs Net Target
-            </h3>
-            <div class="chart-wrapper"><canvas id="incomeChart"></canvas></div>
-          </div>
-
-          <div class="card" id="mcOutcomeCard" style="display: none">
+          <div
+            class="card result-card collapsible"
+            id="mcSpendPercentileCard"
+            style="display: none"
+          >
             <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Monte Carlo Outcome Distribution
+              Simulation Spending Percentiles Over Time
             </h3>
-            <div
-              id="mcChartSubtitle"
-              style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-            ></div>
-            <div class="chart-wrapper">
-              <canvas id="mcOutcomeChart"></canvas>
+            <div class="result-body">
+              <div
+                id="mcSpendPercentileSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcSpendPercentileChart"></canvas>
+              </div>
             </div>
           </div>
 
-          <div class="card" id="mcPercentileCard" style="display: none">
+          <div
+            class="card result-card collapsible"
+            id="mcPercentileCard"
+            style="display: none"
+          >
             <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Monte Carlo Asset Percentiles Over Time
+              Simulation Asset Percentiles Over Time
             </h3>
-            <div
-              id="mcPercentileSubtitle"
-              style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-            ></div>
-            <div class="chart-wrapper">
-              <canvas id="mcPercentileChart"></canvas>
-            </div>
-          </div>
-
-          <div class="card" id="mcSpendPercentileCard" style="display: none">
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Monte Carlo Spending Percentiles Over Time
-            </h3>
-            <div
-              id="mcSpendPercentileSubtitle"
-              style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-            ></div>
-            <div class="chart-wrapper">
-              <canvas id="mcSpendPercentileChart"></canvas>
+            <div class="result-body">
+              <div
+                id="mcPercentileSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcPercentileChart"></canvas>
+              </div>
             </div>
           </div>
 
           <!-- Summary Box -->
-          <div class="card">
+          <div class="card result-card collapsible" id="summaryCard">
             <h3 style="margin-top: 0; margin-bottom: 15px">
               Lifetime Summary Totals
               <span
@@ -1012,76 +978,117 @@
                 style="font-size: 0.9rem; font-weight: normal; color: #64748b"
               ></span>
             </h3>
-            <div class="summary-grid" id="summaryGrid">
-              <!-- Injected via JS -->
+            <div class="result-body">
+              <div class="summary-grid" id="summaryGrid">
+                <!-- Injected via JS -->
+              </div>
+              <div
+                id="debugSummary"
+                style="
+                  display: none;
+                  margin-top: 12px;
+                  padding: 12px;
+                  border: 1px solid #cbd5e1;
+                  border-radius: 8px;
+                  background: #f8fafc;
+                  font-size: 0.85rem;
+                "
+              ></div>
             </div>
-            <div
-              id="mcSummary"
-              style="
-                display: none;
-                margin-top: 12px;
-                padding: 12px;
-                border: 1px solid #bfdbfe;
-                border-radius: 8px;
-                background: #eff6ff;
-                font-size: 0.85rem;
-              "
-            ></div>
-            <div
-              id="debugSummary"
-              style="
-                display: none;
-                margin-top: 12px;
-                padding: 12px;
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                background: #f8fafc;
-                font-size: 0.85rem;
-              "
-            ></div>
           </div>
-        </div>
-      </div>
 
-      <!-- Data Table -->
-      <div class="card table-container">
-        <h3 style="margin-top: 0; margin-bottom: 10px">
-          Yearly Breakdown
-          <span
-            id="tableSubtitle"
-            style="font-size: 0.9rem; font-weight: normal; color: #64748b"
-          ></span>
-        </h3>
-        <div class="yearly-table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th rowspan="2">Age</th>
-                <th rowspan="2">Target Spend<br />(Net)</th>
-                <th colspan="5" class="group-header">
-                  Gross Withdrawals & Income Sources
-                </th>
-                <th colspan="2" class="group-header">Taxes</th>
-                <th colspan="4" class="group-header">End of Year Balances</th>
-              </tr>
-              <tr>
-                <th>CPP</th>
-                <th>OAS</th>
-                <th>RRSP Draw</th>
-                <th>TFSA Draw</th>
-                <th>Non-Reg Draw</th>
-                <th style="color: #ef4444">Income Tax</th>
-                <th style="color: #ef4444">OAS Clawback</th>
-                <th>RRSP</th>
-                <th>TFSA</th>
-                <th>Non-Reg (ACB)</th>
-                <th>Total Assets</th>
-              </tr>
-            </thead>
-            <tbody id="tableBody">
-              <!-- Rows injected via JS -->
-            </tbody>
-          </table>
+          <div class="card result-card collapsible" id="baselineBalanceCard">
+            <h3
+              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
+              id="chart1Title"
+            >
+              Asset Balances Over Time
+            </h3>
+            <div class="result-body">
+              <div class="chart-wrapper">
+                <canvas id="balanceChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="card result-card collapsible" id="baselineIncomeCard">
+            <h3
+              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
+              id="chart2Title"
+            >
+              Gross Income Sources vs Net Target
+            </h3>
+            <div class="result-body">
+              <div class="chart-wrapper">
+                <canvas id="incomeChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="card result-card collapsible"
+            id="mcOutcomeCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Simulation Outcome Distribution
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcChartSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcOutcomeChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div
+            class="card result-card collapsible table-container"
+            id="yearlyBreakdownCard"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 10px">
+              Yearly Breakdown
+              <span
+                id="tableSubtitle"
+                style="font-size: 0.9rem; font-weight: normal; color: #64748b"
+              ></span>
+            </h3>
+            <div class="result-body">
+              <div class="yearly-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th rowspan="2">Age</th>
+                      <th rowspan="2">Target Spend<br />(Net)</th>
+                      <th colspan="5" class="group-header">
+                        Gross Withdrawals & Income Sources
+                      </th>
+                      <th colspan="2" class="group-header">Taxes</th>
+                      <th colspan="4" class="group-header">
+                        End of Year Balances
+                      </th>
+                    </tr>
+                    <tr>
+                      <th>CPP</th>
+                      <th>OAS</th>
+                      <th>RRSP Draw</th>
+                      <th>TFSA Draw</th>
+                      <th>Non-Reg Draw</th>
+                      <th style="color: #ef4444">Income Tax</th>
+                      <th style="color: #ef4444">OAS Clawback</th>
+                      <th>RRSP</th>
+                      <th>TFSA</th>
+                      <th>Non-Reg (ACB)</th>
+                      <th>Total Assets</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tableBody">
+                    <!-- Rows injected via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
