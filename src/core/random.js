@@ -18,6 +18,30 @@ export function randomNormal(rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
+export function randomStudentT(rng, degreesOfFreedom = 5) {
+  if (degreesOfFreedom <= 2) {
+    throw new Error("degreesOfFreedom must be greater than 2");
+  }
+
+  let chiSquare = 0;
+  for (let i = 0; i < degreesOfFreedom; i++) {
+    const z = randomNormal(rng);
+    chiSquare += z * z;
+  }
+
+  return randomNormal(rng) / Math.sqrt(chiSquare / degreesOfFreedom);
+}
+
+export function randomShock(rng, model = "normal") {
+  if (model === "fat-tail") {
+    const degreesOfFreedom = 5;
+    const varianceScale = Math.sqrt((degreesOfFreedom - 2) / degreesOfFreedom);
+    return randomStudentT(rng, degreesOfFreedom) * varianceScale;
+  }
+
+  return randomNormal(rng);
+}
+
 export function percentile(values, p) {
   if (!values.length) return 0;
   // Nearest-rank style index keeps outputs stable across reruns/tests.

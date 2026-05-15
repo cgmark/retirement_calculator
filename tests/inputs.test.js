@@ -31,6 +31,7 @@ function buildDoc(overrides = {}) {
     enforceRrifMin: "yes",
     strategy: "tfsa-rrsp-nonreg",
     enableMonteCarlo: false,
+    mcModel: "normal",
     mcTrials: "",
     mcVolatility: "",
     mcInflationVolatility: "",
@@ -68,6 +69,16 @@ describe("readScenarioInputs", () => {
     expect(inputs.inflation).toBe(0.025);
     expect(inputs.growth).toBe(0.055);
     expect(inputs.mcTrials).toBe(1000);
+    expect(inputs.mcModel).toBe("normal");
+  });
+
+  it("reads the selected Monte Carlo model", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ mcModel: "fat-tail" }),
+      () => [],
+    );
+
+    expect(inputs.mcModel).toBe("fat-tail");
   });
 
   it("clamps ACB down to non-registered balance", () => {

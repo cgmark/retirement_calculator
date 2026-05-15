@@ -5,7 +5,7 @@ import {
   TFSA_ANNUAL_ROOM_BASE,
 } from "./tax.js";
 import { getRrifMinimumRate } from "./rrif.js";
-import { createSeededRng, randomNormal, percentile } from "./random.js";
+import { createSeededRng, randomShock, percentile } from "./random.js";
 import { getTargetSpendingForYear } from "./spendingPolicy.js";
 import {
   applyProportionalDraw,
@@ -49,6 +49,7 @@ export async function runMonteCarlo(params) {
     projectionAge,
     grossEmploymentIncome,
     trials,
+    mcModel = "normal",
     volatility,
     inflationVolatility,
     badYearSpendCutPct = 0,
@@ -113,7 +114,7 @@ export async function runMonteCarlo(params) {
       const shouldApplyBadYearCut =
         spendingMode !== "rolling-amortization" && badYearSpendCutPct > 0;
       const sampledGrowthForSpending = shouldApplyBadYearCut
-        ? growth + volatility * randomNormal(rng)
+        ? growth + volatility * randomShock(rng, mcModel)
         : null;
       const spendingReductionFactor =
         sampledGrowthForSpending !== null && sampledGrowthForSpending < 0
@@ -368,10 +369,10 @@ export async function runMonteCarlo(params) {
       const sampledGrowth =
         sampledGrowthForSpending !== null
           ? sampledGrowthForSpending
-          : growth + volatility * randomNormal(rng);
+          : growth + volatility * randomShock(rng, mcModel);
       const yearlyGrowth = Math.max(-0.95, sampledGrowth);
       const sampledInflation =
-        inflation + inflationVolatility * randomNormal(rng);
+        inflation + inflationVolatility * randomShock(rng, mcModel);
       const yearlyInflation = Math.max(-0.03, Math.min(0.2, sampledInflation));
       rrsp *= 1 + yearlyGrowth;
       tfsa *= 1 + yearlyGrowth;

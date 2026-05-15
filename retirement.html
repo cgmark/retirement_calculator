@@ -799,6 +799,20 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 8px">
                   <label
+                    for="mcModel"
+                    title="Choose whether simulation shocks follow a standard bell curve or a fat-tail curve with more extreme years."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Simulation Model</label
+                  ><select
+                    id="mcModel"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  >
+                    <option value="normal" selected>Normal</option>
+                    <option value="fat-tail">Fat-tail</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
                     for="mcTrials"
                     title="How many random futures to test. More trials are smoother but slower."
                     style="display: inline-block; width: 68%; margin-bottom: 0"
@@ -877,6 +891,10 @@
                 <div style="font-size: 0.8rem; color: #64748b">
                   Annual inflation shocks are allowed down to -3% and capped at
                   20%.
+                </div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px">
+                  Normal MC uses a standard bell curve. Fat-tail MC makes very
+                  good and very bad years happen more often.
                 </div>
                 <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px">
                   Return volatility guide: Conservative ~6%, Balanced ~10-12%,
