@@ -28,6 +28,7 @@ describe("runRetirementCalculation", () => {
         enforceRrifMin: true,
         strategy: "tfsa-rrsp-nonreg",
         enableMonteCarlo: true,
+        mcModel: "fat-tail",
         mcTrials: 200,
         mcVolatility: 0.1,
         mcInflationVolatility: 0.01,
@@ -36,7 +37,8 @@ describe("runRetirementCalculation", () => {
       },
       runMonteCarloNow: true,
       lastMonteCarloResults: null,
-      runMonteCarlo: async ({ trials }) => ({
+      runMonteCarlo: async ({ trials, mcModel }) => ({
+        model: mcModel,
         successRate: 0.1,
         cancelled: false,
         trials,
@@ -72,5 +74,6 @@ describe("runRetirementCalculation", () => {
     expect(outcome.solveFailed).toBe(true);
     expect(outcome.solvedSpendOutput).toBeNull();
     expect(outcome.baseSpending).toBe(60000);
+    expect(outcome.monteCarloMeta?.model).toBe("fat-tail");
   });
 });

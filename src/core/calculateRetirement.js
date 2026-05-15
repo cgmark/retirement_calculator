@@ -42,6 +42,7 @@ export async function runRetirementCalculation(params) {
     enforceRrifMin,
     strategy,
     enableMonteCarlo,
+    mcModel = "normal",
     mcTrials,
     mcVolatility,
     mcInflationVolatility,
@@ -89,6 +90,7 @@ export async function runRetirementCalculation(params) {
           strategy,
           projectionAge: lifeExpectancy,
           grossEmploymentIncome,
+          mcModel,
           trials: mcTrials,
           volatility: mcVolatility,
           inflationVolatility: mcInflationVolatility,
@@ -173,6 +175,7 @@ export async function runRetirementCalculation(params) {
       strategy: effectiveStrategy,
       projectionAge: lifeExpectancy,
       grossEmploymentIncome,
+      mcModel,
       trials: mcTrials,
       volatility: mcVolatility,
       inflationVolatility: mcInflationVolatility,
@@ -183,6 +186,7 @@ export async function runRetirementCalculation(params) {
     });
     monteCarloMeta = {
       trials: mcTrials,
+      model: mcModel,
       returnVolatility: mcVolatility,
       inflationVolatility: mcInflationVolatility,
       badYearSpendCutPct: mcBadYearSpendCutPct,

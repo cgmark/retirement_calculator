@@ -59,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "enforceRrifMin",
     "strategy",
     "enableMonteCarlo",
+    "mcModel",
     "mcTrials",
     "mcVolatility",
     "mcInflationVolatility",
@@ -134,6 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("oasPercent", inputs.oasPercent * 100);
       setInputValueIfChanged("rrifStartAge", inputs.rrifStartAge);
       setInputValueIfChanged("mcTrials", inputs.mcTrials);
+      setInputValueIfChanged("mcModel", inputs.mcModel);
       setInputValueIfChanged("mcVolatility", inputs.mcVolatility * 100);
       setInputValueIfChanged(
         "mcInflationVolatility",
@@ -1221,7 +1223,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `Final estate (P10 / Median / P90): ${formatCurrency(monteCarloResults.p10FinalEstate)} / ${formatCurrency(monteCarloResults.medianFinalEstate)} / ${formatCurrency(monteCarloResults.p90FinalEstate)}`,
         `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
         `Last run: ${runAt}`,
-        `Settings used (trials / return vol / inflation vol / seed): ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
+        `Settings used (model / trials / return vol / inflation vol / seed): ${monteCarloMeta?.model === "fat-tail" ? "Fat-tail MC" : "Normal MC"} / ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
         `Bad-year spending cut: ${((monteCarloMeta?.badYearSpendCutPct ?? 0) * 100).toFixed(1)}%`,
         solvedLine,
         partialLine,

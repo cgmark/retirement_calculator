@@ -20,6 +20,7 @@ export const SCENARIO_INPUT_DEFAULTS = {
   oasPercent: 100,
   rrifStartAge: 72,
   mcTrials: 1000,
+  mcModel: "normal",
   mcVolatilityPct: 0,
   mcInflationVolatilityPct: 0,
   mcBadYearSpendCutPct: 0,
@@ -124,6 +125,8 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   const enforceRrifMin = doc.getElementById("enforceRrifMin").value === "yes";
   const strategy = doc.getElementById("strategy").value;
   const enableMonteCarlo = doc.getElementById("enableMonteCarlo").checked;
+  const mcModelRaw = doc.getElementById("mcModel")?.value;
+  const mcModel = mcModelRaw === "fat-tail" ? "fat-tail" : "normal";
   const mcTrials = Math.max(
     100,
     Math.min(10000, readInt("mcTrials", SCENARIO_INPUT_DEFAULTS.mcTrials)),
@@ -183,6 +186,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     enforceRrifMin,
     strategy,
     enableMonteCarlo,
+    mcModel,
     mcTrials,
     mcVolatility,
     mcInflationVolatility,

@@ -86,6 +86,25 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
+  it("supports fat-tail model with deterministic seeded output", async () => {
+    const params = baseParams({ mcModel: "fat-tail", seed: 43, trials: 140 });
+    const a = await runMonteCarlo(params);
+    const b = await runMonteCarlo(params);
+
+    expect(b).toEqual(a);
+  });
+
+  it("produces different results for fat-tail vs normal under same seed", async () => {
+    const normal = await runMonteCarlo(
+      baseParams({ mcModel: "normal", seed: 44, trials: 120 }),
+    );
+    const fatTail = await runMonteCarlo(
+      baseParams({ mcModel: "fat-tail", seed: 44, trials: 120 }),
+    );
+
+    expect(fatTail).not.toEqual(normal);
+  });
+
   it("runs with rrsp-fill-low-bracket +10% and +20% strategies", async () => {
     const plus10 = await runMonteCarlo(
       baseParams({
