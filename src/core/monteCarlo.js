@@ -49,6 +49,7 @@ export async function runMonteCarlo(params) {
     projectionAge,
     grossEmploymentIncome,
     trials,
+    samplePathCount = 10,
     mcModel = "normal",
     volatility,
     inflationVolatility,
@@ -74,6 +75,17 @@ export async function runMonteCarlo(params) {
   const ageLabels = Array.from({ length: yearsCount }, (_, i) => age + i);
   const assetsByYear = Array.from({ length: yearsCount }, () => []);
   const spendingByYear = Array.from({ length: yearsCount }, () => []);
+  const retainedSamplePathCount = Math.max(
+    0,
+    Math.min(samplePathCount, trials),
+  );
+  const samplePathStride =
+    retainedSamplePathCount > 0
+      ? Math.max(1, Math.floor(trials / retainedSamplePathCount))
+      : Infinity;
+  const sampleAssetPaths = [];
+  const sampleSpendPaths = [];
+  const sampleInflationPaths = [];
   const successBucketLabel = `${projectionAge}+ (Success)`;
   const bucketLabels = [
     "Before 65",
@@ -108,6 +120,7 @@ export async function runMonteCarlo(params) {
     let mcInflationFactor = 1;
     const yearlyAssets = new Array(yearsCount).fill(0);
     const yearlySpending = new Array(yearsCount).fill(0);
+    const yearlyInflationFactors = new Array(yearsCount).fill(1);
 
     for (let i = 0; age + i <= projectionAge; i++) {
       const currentAge = age + i;
@@ -122,6 +135,7 @@ export async function runMonteCarlo(params) {
           : 1;
       // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
       const inflationFactor = mcInflationFactor;
+      yearlyInflationFactors[i] = inflationFactor;
       const startingTotalPortfolio = rrsp + tfsa + nonreg;
       const targetBaseSpending = getTargetSpendingForYear({
         spendingMode,
@@ -392,6 +406,14 @@ export async function runMonteCarlo(params) {
     finalEstates.push(rrsp + tfsa + nonreg);
     totalTax += thisTax;
     totalClawback += thisClawback;
+    if (
+      sampleAssetPaths.length < retainedSamplePathCount &&
+      t % samplePathStride === 0
+    ) {
+      sampleAssetPaths.push([...yearlyAssets]);
+      sampleSpendPaths.push([...yearlySpending]);
+      sampleInflationPaths.push([...yearlyInflationFactors]);
+    }
     for (let i = 0; i < yearsCount; i++) assetsByYear[i].push(yearlyAssets[i]);
     for (let i = 0; i < yearsCount; i++)
       spendingByYear[i].push(yearlySpending[i]);
@@ -425,6 +447,9 @@ export async function runMonteCarlo(params) {
           partialSpendP50,
           partialSpendP75,
           partialSpendP90,
+          sampleAssetPaths,
+          sampleSpendPaths,
+          sampleInflationPaths,
         );
       }
       // Yield to the event loop to keep the page responsive during long runs.
@@ -457,6 +482,9 @@ export async function runMonteCarlo(params) {
       spendP50: [],
       spendP75: [],
       spendP90: [],
+      sampleAssetPaths: [],
+      sampleSpendPaths: [],
+      sampleInflationPaths: [],
     };
   }
 
@@ -497,5 +525,8 @@ export async function runMonteCarlo(params) {
     spendP50,
     spendP75,
     spendP90,
+    sampleAssetPaths,
+    sampleSpendPaths,
+    sampleInflationPaths,
   };
 }

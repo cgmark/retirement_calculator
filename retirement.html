@@ -845,6 +845,22 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 8px">
                   <label
+                    for="mcSamplePaths"
+                    title="How many individual simulation paths to retain and draw on the sample path charts. Set to 0 to hide them."
+                    style="display: inline-block; width: 68%; margin-bottom: 0"
+                    >Sample Paths Shown</label
+                  ><input
+                    type="number"
+                    id="mcSamplePaths"
+                    value="10"
+                    min="0"
+                    max="50"
+                    step="1"
+                    style="display: inline-block; width: 30%; margin-left: 2%"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 8px">
+                  <label
                     for="mcInflationVolatility"
                     title="How much yearly inflation can vary around your base inflation input."
                     style="display: inline-block; width: 68%; margin-bottom: 0"
@@ -908,6 +924,10 @@
                   Seed guide: leave blank for a fresh random run each time; use
                   a fixed seed to reproduce the same result.
                 </div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px">
+                  Sample paths guide: 5-10 is usually readable; 0 disables the
+                  sample-path charts.
+                </div>
               </div>
             </div>
 
@@ -949,6 +969,61 @@
 
         <!-- Charts Column -->
         <div class="charts-container">
+          <div
+            class="card result-card collapsible"
+            id="mcSamplePathControlsCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Sample Path Pair Toggles
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcSamplePathControlsSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div id="mcSamplePathControls"></div>
+            </div>
+          </div>
+
+          <div
+            class="card result-card collapsible"
+            id="mcSampleSpendCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Simulation Spending Sample Paths
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcSampleSpendSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcSampleSpendChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="card result-card collapsible"
+            id="mcSampleAssetCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Simulation Asset Sample Paths
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcSampleAssetSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcSampleAssetChart"></canvas>
+              </div>
+            </div>
+          </div>
+
           <div
             class="card result-card collapsible"
             id="mcSpendPercentileCard"

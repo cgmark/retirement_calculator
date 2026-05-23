@@ -17,6 +17,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let mcOutcomeChartInst = null;
   let mcPercentileChartInst = null;
   let mcSpendPercentileChartInst = null;
+  let mcSampleAssetChartInst = null;
+  let mcSampleSpendChartInst = null;
+  let activeMonteCarloResults = null;
+  let hiddenSamplePathIndices = new Set();
   let lastMonteCarloResults = null;
   let lastMonteCarloMeta = null;
   let mcCancelRequested = false;
@@ -61,6 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "enableMonteCarlo",
     "mcModel",
     "mcTrials",
+    "mcSamplePaths",
     "mcVolatility",
     "mcInflationVolatility",
     "mcBadYearSpendCut",
@@ -135,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("oasPercent", inputs.oasPercent * 100);
       setInputValueIfChanged("rrifStartAge", inputs.rrifStartAge);
       setInputValueIfChanged("mcTrials", inputs.mcTrials);
+      setInputValueIfChanged("mcSamplePaths", inputs.mcSamplePaths);
       setInputValueIfChanged("mcModel", inputs.mcModel);
       setInputValueIfChanged("mcVolatility", inputs.mcVolatility * 100);
       setInputValueIfChanged(
@@ -662,6 +668,245 @@ document.addEventListener("DOMContentLoaded", () => {
     mcSpendPercentileChartInst.update("none");
   }
 
+  function getSamplePathStroke(index, total) {
+    const hue = total <= 1 ? 210 : Math.round((index / total) * 300);
+    return `hsl(${hue}, 70%, 42%)`;
+  }
+
+  function getSamplePathCount(monteCarloResults) {
+    return Math.max(
+      monteCarloResults?.sampleAssetPaths?.length || 0,
+      monteCarloResults?.sampleSpendPaths?.length || 0,
+    );
+  }
+
+  function pruneSamplePathVisibility(pathCount) {
+    hiddenSamplePathIndices = new Set(
+      [...hiddenSamplePathIndices].filter((index) => index < pathCount),
+    );
+  }
+
+  function refreshMonteCarloSampleViews() {
+    renderMonteCarloSamplePathControls(activeMonteCarloResults);
+    renderMonteCarloSampleAssetChart(activeMonteCarloResults);
+    renderMonteCarloSampleSpendChart(activeMonteCarloResults);
+  }
+
+  function renderMonteCarloSamplePathControls(monteCarloResults) {
+    activeMonteCarloResults = monteCarloResults;
+    const card = document.getElementById("mcSamplePathControlsCard");
+    const controlsEl = document.getElementById("mcSamplePathControls");
+    const subtitleEl = document.getElementById("mcSamplePathControlsSubtitle");
+    if (!card || !controlsEl || !subtitleEl) return;
+
+    const pathCount = getSamplePathCount(monteCarloResults);
+    if (!monteCarloResults || !monteCarloResults.trials || pathCount === 0) {
+      card.style.display = "none";
+      controlsEl.innerHTML = "";
+      subtitleEl.innerText = "";
+      hiddenSamplePathIndices = new Set();
+      return;
+    }
+
+    pruneSamplePathVisibility(pathCount);
+    card.style.display = "block";
+    const visibleCount = pathCount - hiddenSamplePathIndices.size;
+    subtitleEl.innerText = `${visibleCount.toLocaleString()} of ${pathCount.toLocaleString()} sampled path pairs visible. Each toggle applies to the matching asset and spending path.`;
+
+    controlsEl.innerHTML = `
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <button type="button" id="showAllSamplePaths" style="background:#0f766e;">Show all</button>
+        <button type="button" id="hideAllSamplePaths" style="background:#475569;">Hide all</button>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    `;
+
+    const buttonsRow = controlsEl.lastElementChild;
+    for (let index = 0; index < pathCount; index++) {
+      const label = document.createElement("label");
+      label.style.display = "inline-flex";
+      label.style.alignItems = "center";
+      label.style.gap = "8px";
+      label.style.padding = "6px 10px";
+      label.style.border = "1px solid #cbd5e1";
+      label.style.borderRadius = "999px";
+      label.style.background = "#fff";
+      label.style.fontSize = "0.85rem";
+      label.style.cursor = "pointer";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = !hiddenSamplePathIndices.has(index);
+      input.style.width = "auto";
+      input.addEventListener("change", () => {
+        if (input.checked) hiddenSamplePathIndices.delete(index);
+        else hiddenSamplePathIndices.add(index);
+        refreshMonteCarloSampleViews();
+      });
+
+      const swatch = document.createElement("span");
+      swatch.style.display = "inline-block";
+      swatch.style.width = "12px";
+      swatch.style.height = "12px";
+      swatch.style.borderRadius = "999px";
+      swatch.style.background = getSamplePathStroke(index, pathCount);
+
+      const text = document.createElement("span");
+      text.innerText = `Path ${index + 1}`;
+
+      label.appendChild(input);
+      label.appendChild(swatch);
+      label.appendChild(text);
+      buttonsRow.appendChild(label);
+    }
+
+    document
+      .getElementById("showAllSamplePaths")
+      ?.addEventListener("click", () => {
+        hiddenSamplePathIndices = new Set();
+        refreshMonteCarloSampleViews();
+      });
+    document
+      .getElementById("hideAllSamplePaths")
+      ?.addEventListener("click", () => {
+        hiddenSamplePathIndices = new Set(
+          Array.from({ length: pathCount }, (_, index) => index),
+        );
+        refreshMonteCarloSampleViews();
+      });
+  }
+
+  function renderMonteCarloSamplePathChart({
+    monteCarloResults,
+    cardId,
+    subtitleId,
+    canvasId,
+    chartRef,
+    assignChart,
+    seriesKey,
+    titleNoun,
+  }) {
+    const card = document.getElementById(cardId);
+    const subtitle = document.getElementById(subtitleId);
+    if (!card || !subtitle) return;
+
+    const samplePaths = monteCarloResults?.[seriesKey] || [];
+    activeMonteCarloResults = monteCarloResults;
+    if (
+      !monteCarloResults ||
+      !monteCarloResults.trials ||
+      !monteCarloResults.ageLabels?.length ||
+      samplePaths.length === 0
+    ) {
+      if (chartRef) {
+        chartRef.destroy();
+        assignChart(null);
+      }
+      card.style.display = "none";
+      subtitle.innerText = "";
+      return;
+    }
+
+    card.style.display = "block";
+    pruneSamplePathVisibility(samplePaths.length);
+    const displayInflated = document.getElementById("displayMode").checked;
+    const baseInflation =
+      readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
+    const labels = monteCarloResults.ageLabels;
+    const adjustedPaths = samplePaths.map((series, pathIndex) => {
+      const pathInflationFactors = monteCarloResults.sampleInflationPaths || [];
+      const inflationSeries = pathInflationFactors[pathIndex] || [];
+      return series.map((value, idx) => {
+        if (displayInflated) return value;
+        const fallbackFactor = Math.pow(1 + baseInflation, idx);
+        const displayFactor = inflationSeries[idx] || fallbackFactor;
+        return value / displayFactor;
+      });
+    });
+    const visiblePaths = adjustedPaths
+      .map((series, index) => ({ series, index }))
+      .filter(({ index }) => !hiddenSamplePathIndices.has(index));
+    subtitle.innerText = `Showing ${visiblePaths.length.toLocaleString()} of ${adjustedPaths.length.toLocaleString()} sample ${titleNoun.toLowerCase()} path${adjustedPaths.length === 1 ? "" : "s"} from ${monteCarloResults.trials.toLocaleString()} completed trial${monteCarloResults.trials === 1 ? "" : "s"}${monteCarloResults.cancelled ? " (partial run)" : ""}. Values shown in ${displayInflated ? "inflated/nominal" : "today's"} dollars.`;
+
+    const data = {
+      labels,
+      datasets: visiblePaths.map(({ series, index }) => ({
+        label: `Path ${index + 1}`,
+        data: series,
+        borderColor: getSamplePathStroke(index, adjustedPaths.length),
+        borderWidth: 1.8,
+        pointRadius: 0,
+        fill: false,
+      })),
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          min: 0,
+          ticks: { callback: (v) => "$" + Number(v).toLocaleString() },
+        },
+      },
+    };
+
+    if (!chartRef) {
+      assignChart(
+        new Chart(document.getElementById(canvasId).getContext("2d"), {
+          type: "line",
+          data,
+          options,
+        }),
+      );
+      return;
+    }
+
+    chartRef.data = data;
+    chartRef.options = options;
+    chartRef.update("none");
+  }
+
+  function renderMonteCarloSampleAssetChart(monteCarloResults) {
+    renderMonteCarloSamplePathChart({
+      monteCarloResults,
+      cardId: "mcSampleAssetCard",
+      subtitleId: "mcSampleAssetSubtitle",
+      canvasId: "mcSampleAssetChart",
+      chartRef: mcSampleAssetChartInst,
+      assignChart: (chart) => {
+        mcSampleAssetChartInst = chart;
+      },
+      seriesKey: "sampleAssetPaths",
+      titleNoun: "Asset",
+    });
+  }
+
+  function renderMonteCarloSampleSpendChart(monteCarloResults) {
+    renderMonteCarloSamplePathChart({
+      monteCarloResults,
+      cardId: "mcSampleSpendCard",
+      subtitleId: "mcSampleSpendSubtitle",
+      canvasId: "mcSampleSpendChart",
+      chartRef: mcSampleSpendChartInst,
+      assignChart: (chart) => {
+        mcSampleSpendChartInst = chart;
+      },
+      seriesKey: "sampleSpendPaths",
+      titleNoun: "Spending",
+    });
+  }
+
   async function calculateRetirement(runMonteCarloNow = true) {
     if (recalcTimer) {
       clearTimeout(recalcTimer);
@@ -724,6 +969,9 @@ document.addEventListener("DOMContentLoaded", () => {
           spendP50,
           spendP75,
           spendP90,
+          sampleAssetPaths,
+          sampleSpendPaths,
+          sampleInflationPaths,
         ) => {
           if (runStatusEl) {
             const pct = ((done / total) * 100).toFixed(0);
@@ -748,6 +996,9 @@ document.addEventListener("DOMContentLoaded", () => {
             spendP50,
             spendP75,
             spendP90,
+            sampleAssetPaths,
+            sampleSpendPaths,
+            sampleInflationPaths,
           });
           renderMonteCarloPercentileChart({
             trials: done,
@@ -774,6 +1025,30 @@ document.addEventListener("DOMContentLoaded", () => {
             spendP50,
             spendP75,
             spendP90,
+          });
+          renderMonteCarloSamplePathControls({
+            trials: done,
+            requestedTrials: total,
+            cancelled: false,
+            ageLabels,
+            sampleAssetPaths,
+            sampleSpendPaths,
+          });
+          renderMonteCarloSampleAssetChart({
+            trials: done,
+            requestedTrials: total,
+            cancelled: false,
+            ageLabels,
+            sampleAssetPaths,
+            sampleInflationPaths,
+          });
+          renderMonteCarloSampleSpendChart({
+            trials: done,
+            requestedTrials: total,
+            cancelled: false,
+            ageLabels,
+            sampleSpendPaths,
+            sampleInflationPaths,
           });
         },
         shouldCancel: () => mcCancelRequested,
@@ -878,6 +1153,9 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
+      renderMonteCarloSamplePathControls(null);
+      renderMonteCarloSampleAssetChart(null);
+      renderMonteCarloSampleSpendChart(null);
       return;
     }
 
@@ -885,6 +1163,9 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMonteCarloOutcomeChart(lastMonteCarloResults);
       renderMonteCarloPercentileChart(lastMonteCarloResults);
       renderMonteCarloSpendPercentileChart(lastMonteCarloResults);
+      renderMonteCarloSamplePathControls(lastMonteCarloResults);
+      renderMonteCarloSampleAssetChart(lastMonteCarloResults);
+      renderMonteCarloSampleSpendChart(lastMonteCarloResults);
     }
   }
 
@@ -992,6 +1273,8 @@ document.addEventListener("DOMContentLoaded", () => {
           mcOutcomeChartInst?.resize();
           mcPercentileChartInst?.resize();
           mcSpendPercentileChartInst?.resize();
+          mcSampleAssetChartInst?.resize();
+          mcSampleSpendChartInst?.resize();
         }
       });
     });
@@ -1093,6 +1376,9 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
+      renderMonteCarloSamplePathControls(null);
+      renderMonteCarloSampleAssetChart(null);
+      renderMonteCarloSampleSpendChart(null);
       const debugEl = document.getElementById("debugSummary");
       if (debugEl) {
         debugEl.style.display = "none";
@@ -1225,6 +1511,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `Last run: ${runAt}`,
         `Settings used (model / trials / return vol / inflation vol / seed): ${monteCarloMeta?.model === "fat-tail" ? "Fat-tail MC" : "Normal MC"} / ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
         `Bad-year spending cut: ${((monteCarloMeta?.badYearSpendCutPct ?? 0) * 100).toFixed(1)}%`,
+        `Sample paths shown: ${monteCarloMeta?.samplePathCount ?? monteCarloResults.sampleAssetPaths?.length ?? 0}`,
         solvedLine,
         partialLine,
         staleLine,
@@ -1253,10 +1540,16 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMonteCarloOutcomeChart(monteCarloResults);
       renderMonteCarloPercentileChart(monteCarloResults);
       renderMonteCarloSpendPercentileChart(monteCarloResults);
+      renderMonteCarloSamplePathControls(monteCarloResults);
+      renderMonteCarloSampleAssetChart(monteCarloResults);
+      renderMonteCarloSampleSpendChart(monteCarloResults);
     } else {
       renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
+      renderMonteCarloSamplePathControls(null);
+      renderMonteCarloSampleAssetChart(null);
+      renderMonteCarloSampleSpendChart(null);
     }
 
     const debugMode = document.getElementById("debugMode").value;
