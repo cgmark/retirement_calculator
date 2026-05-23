@@ -56,6 +56,9 @@ describe("runMonteCarlo", () => {
     expect(res.spendP10.length).toBe(res.ageLabels.length);
     expect(res.spendP50.length).toBe(res.ageLabels.length);
     expect(res.spendP90.length).toBe(res.ageLabels.length);
+    expect(Array.isArray(res.sampleAssetPaths)).toBe(true);
+    expect(Array.isArray(res.sampleSpendPaths)).toBe(true);
+    expect(Array.isArray(res.sampleInflationPaths)).toBe(true);
     expect(
       res.bucketLabels.every((label) =>
         Number.isFinite(res.bucketCounts[label]),
@@ -75,6 +78,21 @@ describe("runMonteCarlo", () => {
     expect(res.cancelled).toBe(true);
     expect(res.trials).toBeGreaterThan(0);
     expect(res.trials).toBeLessThan(res.requestedTrials);
+    expect(res.sampleAssetPaths.length).toBeLessThanOrEqual(res.trials);
+    expect(res.sampleSpendPaths.length).toBeLessThanOrEqual(res.trials);
+  });
+
+  it("retains a configurable number of sample paths", async () => {
+    const res = await runMonteCarlo(
+      baseParams({ trials: 12, samplePathCount: 3, seed: 321 }),
+    );
+
+    expect(res.sampleAssetPaths).toHaveLength(3);
+    expect(res.sampleSpendPaths).toHaveLength(3);
+    expect(res.sampleInflationPaths).toHaveLength(3);
+    expect(res.sampleAssetPaths[0]).toHaveLength(res.ageLabels.length);
+    expect(res.sampleSpendPaths[0]).toHaveLength(res.ageLabels.length);
+    expect(res.sampleInflationPaths[0]).toHaveLength(res.ageLabels.length);
   });
 
   it("runs with rrsp-fill-low-bracket strategy", async () => {

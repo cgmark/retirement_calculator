@@ -20,6 +20,7 @@ export const SCENARIO_INPUT_DEFAULTS = {
   oasPercent: 100,
   rrifStartAge: 72,
   mcTrials: 1000,
+  mcSamplePaths: 10,
   mcModel: "normal",
   mcVolatilityPct: 0,
   mcInflationVolatilityPct: 0,
@@ -131,6 +132,13 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     100,
     Math.min(10000, readInt("mcTrials", SCENARIO_INPUT_DEFAULTS.mcTrials)),
   );
+  const mcSamplePaths = Math.max(
+    0,
+    Math.min(
+      50,
+      readInt("mcSamplePaths", SCENARIO_INPUT_DEFAULTS.mcSamplePaths),
+    ),
+  );
   const mcVolatility = Math.max(
     0,
     readFloat("mcVolatility", SCENARIO_INPUT_DEFAULTS.mcVolatilityPct) / 100,
@@ -188,6 +196,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     enableMonteCarlo,
     mcModel,
     mcTrials,
+    mcSamplePaths,
     mcVolatility,
     mcInflationVolatility,
     mcBadYearSpendCutPct,
