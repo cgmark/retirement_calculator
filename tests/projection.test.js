@@ -253,9 +253,11 @@ describe("runDeterministicProjection", () => {
       oasPercent: 1,
       rrifStartAge: 72,
       enforceRrifMin: true,
-      effectiveStrategy: "rrsp-fill-low-bracket-tfsa-transfer-opportunistic-tfsa",
+      effectiveStrategy:
+        "rrsp-fill-low-bracket-tfsa-transfer-opportunistic-tfsa",
     };
-    const { results: withCredits } = await runDeterministicProjection(baseParams);
+    const { results: withCredits } =
+      await runDeterministicProjection(baseParams);
     const { results: withoutCredits } = await runDeterministicProjection({
       ...baseParams,
       disableRetirementCredits: true,

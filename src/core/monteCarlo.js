@@ -164,7 +164,8 @@ export async function runMonteCarlo(params) {
 
       const getTaxContext = (extraEligiblePensionIncome = 0) => ({
         age: currentAge,
-        eligiblePensionIncome: eligiblePensionIncome + extraEligiblePensionIncome,
+        eligiblePensionIncome:
+          eligiblePensionIncome + extraEligiblePensionIncome,
       });
 
       const isWorkingYear = currentAge < retirementAge;

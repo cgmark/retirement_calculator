@@ -1871,7 +1871,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     (item) => item.dataset.label === "Income Tax",
                   );
                   const noCreditItem = tooltipItems.find(
-                    (item) => item.dataset.label === "Income Tax Without Credits",
+                    (item) =>
+                      item.dataset.label === "Income Tax Without Credits",
                   );
                   if (!incomeTaxItem || !noCreditItem) return "";
                   const taxSaved = Math.max(

@@ -204,7 +204,11 @@ const FEDERAL_PENSION_AMOUNT_BASE = 2000;
 
 function normalizeTaxContext(taxContext) {
   if (!taxContext)
-    return { age: 0, eligiblePensionIncome: 0, disableRetirementCredits: false };
+    return {
+      age: 0,
+      eligiblePensionIncome: 0,
+      disableRetirementCredits: false,
+    };
   return {
     age: Math.max(0, taxContext.age || 0),
     eligiblePensionIncome: Math.max(0, taxContext.eligiblePensionIncome || 0),
@@ -233,7 +237,12 @@ function getProvincialAgeAmount(income, inflFactor, age, ageAmountData) {
   return Math.max(0, maxAgeAmount - reduction * ageAmountData.reductionRate);
 }
 
-function getProvincialPensionAmount(inflFactor, age, eligiblePensionIncome, pData) {
+function getProvincialPensionAmount(
+  inflFactor,
+  age,
+  eligiblePensionIncome,
+  pData,
+) {
   if (!pData.pensionAmount || age < pData.pensionAmount.minAge) return 0;
   return Math.min(
     eligiblePensionIncome,
@@ -269,7 +278,10 @@ export function calculateTax(income, provCode, inflFactor, taxContext) {
     : getFederalAgeAmount(income, inflFactor, age);
   const federalPensionAmount =
     !disableRetirementCredits && age >= 65
-      ? Math.min(eligiblePensionIncome, FEDERAL_PENSION_AMOUNT_BASE * inflFactor)
+      ? Math.min(
+          eligiblePensionIncome,
+          FEDERAL_PENSION_AMOUNT_BASE * inflFactor,
+        )
       : 0;
   fedTax -=
     (fedBPA + federalAgeAmount + federalPensionAmount) * FEDERAL_LOWEST_RATE;
