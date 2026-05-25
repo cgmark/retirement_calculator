@@ -19,6 +19,14 @@ describe("calculateTax", () => {
     expect(age65Tax).toBeLessThan(age64Tax);
   });
 
+  it("includes the Ontario provincial age credit at 65+", () => {
+    const ageReduction =
+      calculateTax(50000, "ON", 1, { age: 64 }) -
+      calculateTax(50000, "ON", 1, { age: 65 });
+
+    expect(ageReduction).toBeCloseTo(1459.1796, 4);
+  });
+
   it("phases out the federal age credit at higher income", () => {
     const moderateIncomeCredit =
       calculateTax(50000, "ON", 1, { age: 64 }) -
@@ -49,6 +57,17 @@ describe("calculateTax", () => {
       eligiblePensionIncome: 5000,
     });
     expect(aboveCap).toBe(atCap);
+  });
+
+  it("includes the Ontario provincial pension income credit", () => {
+    const pensionReduction =
+      calculateTax(40000, "ON", 1, { age: 65 }) -
+      calculateTax(40000, "ON", 1, {
+        age: 65,
+        eligiblePensionIncome: 5000,
+      });
+
+    expect(pensionReduction).toBeCloseTo(386.557, 3);
   });
 });
 
