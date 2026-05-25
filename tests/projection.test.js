@@ -233,6 +233,38 @@ describe("runDeterministicProjection", () => {
     expect(results[0].total).toBeCloseTo(573262.5881658745, 6);
   });
 
+  it("shows lower retirement tax and higher estate when credits are enabled", async () => {
+    const baseParams = {
+      age: 75,
+      retirementAge: 65,
+      rrspStart: 500000,
+      tfsaStart: 50000,
+      nonregStart: 80000,
+      acbStart: 80000,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 75,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 1,
+      rrifStartAge: 72,
+      enforceRrifMin: true,
+      effectiveStrategy: "rrsp-fill-low-bracket-tfsa-transfer-opportunistic-tfsa",
+    };
+    const { results: withCredits } = await runDeterministicProjection(baseParams);
+    const { results: withoutCredits } = await runDeterministicProjection({
+      ...baseParams,
+      disableRetirementCredits: true,
+    });
+
+    expect(withCredits[0].incomeTax).toBeLessThan(withoutCredits[0].incomeTax);
+    expect(withCredits[0].total).toBeGreaterThan(withoutCredits[0].total);
+  });
+
   it("recomputes rolling amortized spending from remaining assets and years", async () => {
     const { results } = await runDeterministicProjection({
       age: 60,

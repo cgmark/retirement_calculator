@@ -1118,6 +1118,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       updateUI(
         outcome.results,
+        outcome.resultsWithoutRetirementCredits,
         outcome.monteCarloResults,
         outcome.enableMonteCarlo,
         outcome.monteCarloStale,
@@ -1355,6 +1356,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateUI(
     results,
+    resultsWithoutRetirementCredits,
     monteCarloResults,
     monteCarloEnabled,
     monteCarloStale,
@@ -1393,6 +1395,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const adj = (val, idx) =>
       displayInflated ? val : val / Math.pow(1 + inflation, idx);
+
+    const comparisonRows = Array.isArray(resultsWithoutRetirementCredits)
+      ? results.map((row, idx) => {
+          const noCreditRow = resultsWithoutRetirementCredits[idx];
+          const annualTaxWithCredits = adj(row.incomeTax, row.yearIndex);
+          const annualTaxWithoutCredits = noCreditRow
+            ? adj(noCreditRow.incomeTax, noCreditRow.yearIndex)
+            : annualTaxWithCredits;
+          return {
+            age: row.age,
+            annualTaxWithCredits,
+            annualTaxWithoutCredits,
+            annualTaxSavings: Math.max(
+              0,
+              annualTaxWithoutCredits - annualTaxWithCredits,
+            ),
+          };
+        })
+      : [];
 
     const strSuffix = displayInflated
       ? "(Inflated/Nominal Dollars)"
@@ -1438,7 +1459,8 @@ document.addEventListener("DOMContentLoaded", () => {
       totCPP = 0,
       totOAS = 0,
       totTax = 0,
-      totClawback = 0;
+      totClawback = 0,
+      totTaxWithoutCredits = 0;
     results.forEach((r) => {
       totRRSP += adj(r.drawRRSP, r.yearIndex);
       totTFSA += adj(r.drawTFSA, r.yearIndex);
@@ -1448,10 +1470,14 @@ document.addEventListener("DOMContentLoaded", () => {
       totTax += adj(r.incomeTax, r.yearIndex);
       totClawback += adj(r.oasClawback, r.yearIndex);
     });
+    comparisonRows.forEach((r) => {
+      totTaxWithoutCredits += r.annualTaxWithoutCredits;
+    });
 
     const finalRow = results[results.length - 1];
     const finalEstate = adj(finalRow.total, finalRow.yearIndex);
     const depleted = finalRow.depleted;
+    const totalTaxSavings = Math.max(0, totTaxWithoutCredits - totTax);
 
     document.getElementById("summaryGrid").innerHTML = `
             <div class="summary-box ${depleted ? "alert" : "highlight"}">
@@ -1469,6 +1495,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="summary-box alert">
                 <div class="summary-title">Total Income Tax Paid</div>
                 <div class="summary-value">${formatCurrency(totTax)}</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-title">Tax Saved From Retirement Credits</div>
+                <div class="summary-value">${formatCurrency(totalTaxSavings)}</div>
             </div>
             <div class="summary-box alert">
                 <div class="summary-title">Total OAS Clawback</div>
@@ -1628,12 +1658,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- CHARTS ---
     const labels = results.map((r) => r.age);
+    const grossIncomeStackValues = results.map(
+      (r) =>
+        adj(r.cpp, r.yearIndex) +
+        adj(r.oas, r.yearIndex) +
+        adj(r.drawRRSP, r.yearIndex) +
+        adj(r.drawTFSA, r.yearIndex) +
+        adj(r.drawNonReg, r.yearIndex),
+    );
     const effectiveTaxRatePct = results.map((r) => {
       const spending = adj(r.spending, r.yearIndex);
       const incomeTax = adj(r.incomeTax, r.yearIndex);
       if (spending <= 0) return 0;
       return (incomeTax / spending) * 100;
     });
+    const overlayTaxValues = [
+      ...results.map((r) => adj(r.spending, r.yearIndex)),
+      ...results.map((r) => adj(r.oasClawback, r.yearIndex)),
+      ...results.map((r) => adj(r.incomeTax, r.yearIndex)),
+      ...comparisonRows.map((r) => r.annualTaxWithoutCredits),
+    ];
+    const sharedIncomeMax =
+      Math.max(0, ...grossIncomeStackValues, ...overlayTaxValues) * 1.05 || 1;
     const cssVar = (name) =>
       getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -1717,6 +1763,7 @@ document.addEventListener("DOMContentLoaded", () => {
               borderDash: [5, 5],
               fill: false,
               pointRadius: 0,
+              yAxisID: "yOverlay",
               order: 0,
             },
             {
@@ -1758,7 +1805,7 @@ document.addEventListener("DOMContentLoaded", () => {
               borderDash: [4, 4],
               fill: false,
               pointRadius: 0,
-              yAxisID: "y",
+              yAxisID: "yOverlay",
               order: 0,
             },
             {
@@ -1769,7 +1816,19 @@ document.addEventListener("DOMContentLoaded", () => {
               borderWidth: 2,
               fill: false,
               pointRadius: 0,
-              yAxisID: "y",
+              yAxisID: "yOverlay",
+              order: 0,
+            },
+            {
+              type: "line",
+              label: "Income Tax Without Credits",
+              data: comparisonRows.map((r) => r.annualTaxWithoutCredits),
+              borderColor: "#94a3b8",
+              borderWidth: 2,
+              borderDash: [6, 4],
+              fill: false,
+              pointRadius: 0,
+              yAxisID: "yOverlay",
               order: 0,
             },
             {
@@ -1807,11 +1866,47 @@ document.addEventListener("DOMContentLoaded", () => {
                   }
                   return valueLabel;
                 },
+                footer: function (tooltipItems) {
+                  const incomeTaxItem = tooltipItems.find(
+                    (item) => item.dataset.label === "Income Tax",
+                  );
+                  const noCreditItem = tooltipItems.find(
+                    (item) => item.dataset.label === "Income Tax Without Credits",
+                  );
+                  if (!incomeTaxItem || !noCreditItem) return "";
+                  const taxSaved = Math.max(
+                    0,
+                    noCreditItem.parsed.y - incomeTaxItem.parsed.y,
+                  );
+                  return `Tax Saved: ${new Intl.NumberFormat("en-CA", {
+                    style: "currency",
+                    currency: "CAD",
+                    maximumFractionDigits: 0,
+                  }).format(taxSaved)}`;
+                },
               },
             },
           },
           scales: {
-            ...sharedOptions.scales,
+            x: { stacked: true },
+            y: {
+              stacked: true,
+              min: 0,
+              max: sharedIncomeMax,
+              ticks: {
+                callback: function (v) {
+                  return "$" + v.toLocaleString();
+                },
+              },
+            },
+            yOverlay: {
+              position: "left",
+              min: 0,
+              max: sharedIncomeMax,
+              grid: { drawOnChartArea: false, display: false },
+              ticks: { display: false },
+              border: { display: false },
+            },
             y1: {
               position: "right",
               min: 0,

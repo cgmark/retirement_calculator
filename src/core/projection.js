@@ -36,6 +36,7 @@ export async function runDeterministicProjection(params) {
     rrifStartAge,
     enforceRrifMin,
     effectiveStrategy,
+    disableRetirementCredits = false,
     spendingMode = "input",
     amortizationRate = 0,
     targetEstateValue = 0,
@@ -93,6 +94,7 @@ export async function runDeterministicProjection(params) {
     const getTaxContext = (extraEligiblePensionIncome = 0) => ({
       age: currentAge,
       eligiblePensionIncome: eligiblePensionIncome + extraEligiblePensionIncome,
+      disableRetirementCredits,
     });
 
     if (currentAge >= cppScenarioAge)
@@ -258,6 +260,7 @@ export async function runDeterministicProjection(params) {
         calculateTax(mid, provCode, inflationFactor, {
           age: currentAge,
           eligiblePensionIncome: currentAge >= 65 ? mid : 0,
+          disableRetirementCredits,
         }) <= 0.01
       )
         low = mid;

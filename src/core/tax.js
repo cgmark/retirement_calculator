@@ -203,10 +203,12 @@ const FEDERAL_AGE_AMOUNT_EXCESS_REDUCTION_RATE = 0.15;
 const FEDERAL_PENSION_AMOUNT_BASE = 2000;
 
 function normalizeTaxContext(taxContext) {
-  if (!taxContext) return { age: 0, eligiblePensionIncome: 0 };
+  if (!taxContext)
+    return { age: 0, eligiblePensionIncome: 0, disableRetirementCredits: false };
   return {
     age: Math.max(0, taxContext.age || 0),
     eligiblePensionIncome: Math.max(0, taxContext.eligiblePensionIncome || 0),
+    disableRetirementCredits: !!taxContext.disableRetirementCredits,
   };
 }
 
@@ -242,7 +244,8 @@ function getProvincialPensionAmount(inflFactor, age, eligiblePensionIncome, pDat
 export function calculateTax(income, provCode, inflFactor, taxContext) {
   if (income <= 0) return 0;
 
-  const { age, eligiblePensionIncome } = normalizeTaxContext(taxContext);
+  const { age, eligiblePensionIncome, disableRetirementCredits } =
+    normalizeTaxContext(taxContext);
 
   const fedBPA = 15705 * inflFactor;
   const fedBrackets = [
@@ -261,9 +264,11 @@ export function calculateTax(income, provCode, inflFactor, taxContext) {
       fedTax += (Math.min(income, b.limit) - prevLimit) * b.rate;
     prevLimit = b.limit;
   }
-  const federalAgeAmount = getFederalAgeAmount(income, inflFactor, age);
+  const federalAgeAmount = disableRetirementCredits
+    ? 0
+    : getFederalAgeAmount(income, inflFactor, age);
   const federalPensionAmount =
-    age >= 65
+    !disableRetirementCredits && age >= 65
       ? Math.min(eligiblePensionIncome, FEDERAL_PENSION_AMOUNT_BASE * inflFactor)
       : 0;
   fedTax -=
@@ -281,18 +286,12 @@ export function calculateTax(income, provCode, inflFactor, taxContext) {
       provTax += (Math.min(income, limit) - prevLimit) * b.rate;
     prevLimit = limit;
   }
-  const provincialAgeAmount = getProvincialAgeAmount(
-    income,
-    inflFactor,
-    age,
-    pData.ageAmount,
-  );
-  const provincialPensionAmount = getProvincialPensionAmount(
-    inflFactor,
-    age,
-    eligiblePensionIncome,
-    pData,
-  );
+  const provincialAgeAmount = disableRetirementCredits
+    ? 0
+    : getProvincialAgeAmount(income, inflFactor, age, pData.ageAmount);
+  const provincialPensionAmount = disableRetirementCredits
+    ? 0
+    : getProvincialPensionAmount(inflFactor, age, eligiblePensionIncome, pData);
   provTax -=
     provBPA * pData.lowestRate +
     provincialAgeAmount * (pData.ageAmount?.creditRate || 0) +
