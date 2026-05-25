@@ -88,6 +88,12 @@ export async function runDeterministicProjection(params) {
     let employmentIncomeGross = 0;
     let employmentIncomeNet = 0;
     let netNeeded = 0;
+    let eligiblePensionIncome = 0;
+
+    const getTaxContext = (extraEligiblePensionIncome = 0) => ({
+      age: currentAge,
+      eligiblePensionIncome: eligiblePensionIncome + extraEligiblePensionIncome,
+    });
 
     if (currentAge >= cppScenarioAge)
       grossCPP = selectedCPPMonthly * 12 * inflationFactor;
@@ -106,6 +112,7 @@ export async function runDeterministicProjection(params) {
       currentTaxableIncome,
       provCode,
       inflationFactor,
+      getTaxContext(),
     );
     totalIncomeTaxThisYear += baseTax;
     let netAvailableIncome = currentTaxableIncome - baseTax;
@@ -123,13 +130,21 @@ export async function runDeterministicProjection(params) {
             currentTaxableIncome + mandatoryGross,
             provCode,
             inflationFactor,
-          ) - calculateTax(currentTaxableIncome, provCode, inflationFactor);
+            getTaxContext(currentAge >= 65 ? mandatoryGross : 0),
+          ) -
+          calculateTax(
+            currentTaxableIncome,
+            provCode,
+            inflationFactor,
+            getTaxContext(),
+          );
         const mandatoryNet = mandatoryGross - mandatoryTax;
 
         rrsp -= mandatoryGross;
         drawRRSP += mandatoryGross;
         mandatoryRrifDrawThisYear += mandatoryGross;
         currentTaxableIncome += mandatoryGross;
+        if (currentAge >= 65) eligiblePensionIncome += mandatoryGross;
         totalIncomeTaxThisYear += mandatoryTax;
         netAvailableIncome += mandatoryNet;
       }
@@ -160,6 +175,7 @@ export async function runDeterministicProjection(params) {
           reducedTaxableIncome,
           provCode,
           inflationFactor,
+          getTaxContext(),
         );
         const refund = Math.max(0, totalIncomeTaxThisYear - reducedTax);
 
@@ -204,6 +220,7 @@ export async function runDeterministicProjection(params) {
           inclusionRate,
           provCode,
           inflationFactor,
+          getTaxContext(),
         );
         nonreg -= res.gross;
         netNeeded -= res.net;
@@ -221,12 +238,15 @@ export async function runDeterministicProjection(params) {
           1.0,
           provCode,
           inflationFactor,
+          getTaxContext(),
+          currentAge >= 65 ? 1.0 : 0,
         );
         rrsp -= res.gross;
         netNeeded -= res.net;
         totalIncomeTaxThisYear += res.tax;
         drawRRSP += res.gross;
         currentTaxableIncome += res.taxableAdd;
+        if (currentAge >= 65) eligiblePensionIncome += res.taxableAdd;
       }
     };
 
@@ -234,7 +254,13 @@ export async function runDeterministicProjection(params) {
     let high = 50000 * inflationFactor;
     for (let j = 0; j < 20; j++) {
       const mid = (low + high) / 2;
-      if (calculateTax(mid, provCode, inflationFactor) <= 0.01) low = mid;
+      if (
+        calculateTax(mid, provCode, inflationFactor, {
+          age: currentAge,
+          eligiblePensionIncome: currentAge >= 65 ? mid : 0,
+        }) <= 0.01
+      )
+        low = mid;
       else high = mid;
     }
 
@@ -246,6 +272,7 @@ export async function runDeterministicProjection(params) {
       netNeeded -= rrspTaxFreeDraw;
       drawRRSP += rrspTaxFreeDraw;
       currentTaxableIncome += rrspTaxFreeDraw;
+      if (currentAge >= 65) eligiblePensionIncome += rrspTaxFreeDraw;
     }
 
     const executeByStrategy = (targetNet) => {

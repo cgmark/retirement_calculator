@@ -222,15 +222,15 @@ describe("runDeterministicProjection", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].mandatoryRrifDraw).toBeCloseTo(29100, 6);
-    expect(results[0].drawRRSP).toBeCloseTo(44951.85911786902, 6);
-    expect(results[0].drawNonReg).toBeCloseTo(20373.21863909635, 6);
+    expect(results[0].drawRRSP).toBeCloseTo(45270.869340429854, 6);
+    expect(results[0].drawNonReg).toBeCloseTo(18754.718645443627, 6);
     expect(results[0].drawTFSA).toBeCloseTo(0, 6);
-    expect(results[0].incomeTax).toBeCloseTo(8133.397756965367, 6);
+    expect(results[0].incomeTax).toBeCloseTo(6833.9079858734785, 6);
     expect(results[0].oasClawback).toBeCloseTo(0, 6);
-    expect(results[0].rrsp).toBeCloseTo(455048.140882131, 6);
+    expect(results[0].rrsp).toBeCloseTo(454729.13065957016, 6);
     expect(results[0].tfsa).toBeCloseTo(57000, 6);
-    expect(results[0].nonreg).toBeCloseTo(59626.78136090365, 6);
-    expect(results[0].total).toBeCloseTo(571674.9222430347, 6);
+    expect(results[0].nonreg).toBeCloseTo(61245.28135455637, 6);
+    expect(results[0].total).toBeCloseTo(572974.4120141265, 6);
   });
 
   it("recomputes rolling amortized spending from remaining assets and years", async () => {

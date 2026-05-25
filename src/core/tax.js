@@ -112,8 +112,36 @@ export const provData = {
 export const TFSA_ANNUAL_ROOM_BASE = 7000;
 export const RRSP_ANNUAL_MAX_BASE = 32490;
 
-export function calculateTax(income, provCode, inflFactor) {
+const FEDERAL_LOWEST_RATE = 0.15;
+const FEDERAL_AGE_AMOUNT_BASE = 8790;
+const FEDERAL_AGE_AMOUNT_THRESHOLD_BASE = 44325;
+const FEDERAL_AGE_AMOUNT_EXCESS_REDUCTION_RATE = 0.15;
+const FEDERAL_PENSION_AMOUNT_BASE = 2000;
+
+function normalizeTaxContext(taxContext) {
+  if (!taxContext) return { age: 0, eligiblePensionIncome: 0 };
+  return {
+    age: Math.max(0, taxContext.age || 0),
+    eligiblePensionIncome: Math.max(0, taxContext.eligiblePensionIncome || 0),
+  };
+}
+
+function getFederalAgeAmount(income, inflFactor, age) {
+  if (age < 65) return 0;
+
+  const maxAgeAmount = FEDERAL_AGE_AMOUNT_BASE * inflFactor;
+  const reductionThreshold = FEDERAL_AGE_AMOUNT_THRESHOLD_BASE * inflFactor;
+  const reduction = Math.max(0, income - reductionThreshold);
+  return Math.max(
+    0,
+    maxAgeAmount - reduction * FEDERAL_AGE_AMOUNT_EXCESS_REDUCTION_RATE,
+  );
+}
+
+export function calculateTax(income, provCode, inflFactor, taxContext) {
   if (income <= 0) return 0;
+
+  const { age, eligiblePensionIncome } = normalizeTaxContext(taxContext);
 
   const fedBPA = 15705 * inflFactor;
   const fedBrackets = [
@@ -132,7 +160,13 @@ export function calculateTax(income, provCode, inflFactor) {
       fedTax += (Math.min(income, b.limit) - prevLimit) * b.rate;
     prevLimit = b.limit;
   }
-  fedTax -= fedBPA * 0.15;
+  const federalAgeAmount = getFederalAgeAmount(income, inflFactor, age);
+  const federalPensionAmount =
+    age >= 65
+      ? Math.min(eligiblePensionIncome, FEDERAL_PENSION_AMOUNT_BASE * inflFactor)
+      : 0;
+  fedTax -=
+    (fedBPA + federalAgeAmount + federalPensionAmount) * FEDERAL_LOWEST_RATE;
   if (fedTax < 0) fedTax = 0;
 
   // Province tax uses province-specific brackets and BPA/credit rate.
@@ -170,15 +204,28 @@ export function findGrossDraw(
   incRate,
   provCode,
   inflFactor,
+  taxContext,
+  eligiblePensionRate = 0,
 ) {
   if (neededNet <= 0) return { gross: 0, net: 0, tax: 0, taxableAdd: 0 };
+
+  const baseContext = normalizeTaxContext(taxContext);
+  const getTaxContextWithDraw = (grossDraw) => ({
+    ...baseContext,
+    eligiblePensionIncome:
+      baseContext.eligiblePensionIncome + grossDraw * eligiblePensionRate,
+  });
 
   let low = 0;
   let high = Math.min(neededNet * 5, maxGrossAvailable);
   const maxTaxableAdd = maxGrossAvailable * incRate;
   const maxTax =
-    calculateTax(currentTaxableInc + maxTaxableAdd, provCode, inflFactor) -
-    calculateTax(currentTaxableInc, provCode, inflFactor);
+    calculateTax(
+      currentTaxableInc + maxTaxableAdd,
+      provCode,
+      inflFactor,
+      getTaxContextWithDraw(maxGrossAvailable),
+    ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
   const maxNet = maxGrossAvailable - maxTax;
 
   if (maxNet <= neededNet) {
@@ -195,8 +242,12 @@ export function findGrossDraw(
     const mid = (low + high) / 2;
     const taxAdd = mid * incRate;
     const tax =
-      calculateTax(currentTaxableInc + taxAdd, provCode, inflFactor) -
-      calculateTax(currentTaxableInc, provCode, inflFactor);
+      calculateTax(
+        currentTaxableInc + taxAdd,
+        provCode,
+        inflFactor,
+        getTaxContextWithDraw(mid),
+      ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
     const net = mid - tax;
     if (net < neededNet) low = mid;
     else high = mid;
@@ -205,8 +256,12 @@ export function findGrossDraw(
   const finalGross = (low + high) / 2;
   const finalTaxAdd = finalGross * incRate;
   const finalTax =
-    calculateTax(currentTaxableInc + finalTaxAdd, provCode, inflFactor) -
-    calculateTax(currentTaxableInc, provCode, inflFactor);
+    calculateTax(
+      currentTaxableInc + finalTaxAdd,
+      provCode,
+      inflFactor,
+      getTaxContextWithDraw(finalGross),
+    ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
   return {
     gross: finalGross,
     net: finalGross - finalTax,
