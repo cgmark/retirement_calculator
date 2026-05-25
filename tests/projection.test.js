@@ -222,15 +222,49 @@ describe("runDeterministicProjection", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].mandatoryRrifDraw).toBeCloseTo(29100, 6);
-    expect(results[0].drawRRSP).toBeCloseTo(44951.85911786902, 6);
-    expect(results[0].drawNonReg).toBeCloseTo(20373.21863909635, 6);
+    expect(results[0].drawRRSP).toBeCloseTo(45374.97718908428, 6);
+    expect(results[0].drawNonReg).toBeCloseTo(18362.43464504128, 6);
     expect(results[0].drawTFSA).toBeCloseTo(0, 6);
-    expect(results[0].incomeTax).toBeCloseTo(8133.397756965367, 6);
+    expect(results[0].incomeTax).toBeCloseTo(6545.731834125565, 6);
     expect(results[0].oasClawback).toBeCloseTo(0, 6);
-    expect(results[0].rrsp).toBeCloseTo(455048.140882131, 6);
+    expect(results[0].rrsp).toBeCloseTo(454625.0228109157, 6);
     expect(results[0].tfsa).toBeCloseTo(57000, 6);
-    expect(results[0].nonreg).toBeCloseTo(59626.78136090365, 6);
-    expect(results[0].total).toBeCloseTo(571674.9222430347, 6);
+    expect(results[0].nonreg).toBeCloseTo(61637.565354958715, 6);
+    expect(results[0].total).toBeCloseTo(573262.5881658745, 6);
+  });
+
+  it("shows lower retirement tax and higher estate when credits are enabled", async () => {
+    const baseParams = {
+      age: 75,
+      retirementAge: 65,
+      rrspStart: 500000,
+      tfsaStart: 50000,
+      nonregStart: 80000,
+      acbStart: 80000,
+      baseSpending: 60000,
+      activeSchedule: [],
+      lifeExpectancy: 75,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 1,
+      rrifStartAge: 72,
+      enforceRrifMin: true,
+      effectiveStrategy:
+        "rrsp-fill-low-bracket-tfsa-transfer-opportunistic-tfsa",
+    };
+    const { results: withCredits } =
+      await runDeterministicProjection(baseParams);
+    const { results: withoutCredits } = await runDeterministicProjection({
+      ...baseParams,
+      disableRetirementCredits: true,
+    });
+
+    expect(withCredits[0].incomeTax).toBeLessThan(withoutCredits[0].incomeTax);
+    expect(withCredits[0].total).toBeGreaterThan(withoutCredits[0].total);
   });
 
   it("recomputes rolling amortized spending from remaining assets and years", async () => {

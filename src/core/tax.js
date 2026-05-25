@@ -2,6 +2,18 @@ export const provData = {
   ON: {
     bpa: 12399,
     lowestRate: 0.0505,
+    ageAmount: {
+      maxAmount: 6054,
+      threshold: 45068,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.0505,
+    },
+    pensionAmount: {
+      maxAmount: 1714,
+      minAge: 65,
+      creditRate: 0.0505,
+    },
     brackets: [
       { limit: 51446, rate: 0.0505 },
       { limit: 102894, rate: 0.0915 },
@@ -13,6 +25,18 @@ export const provData = {
   BC: {
     bpa: 12580,
     lowestRate: 0.0506,
+    ageAmount: {
+      maxAmount: 5641,
+      threshold: 41993,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.0506,
+    },
+    pensionAmount: {
+      maxAmount: 1000,
+      minAge: 65,
+      creditRate: 0.0506,
+    },
     brackets: [
       { limit: 47937, rate: 0.0506 },
       { limit: 95875, rate: 0.077 },
@@ -26,6 +50,18 @@ export const provData = {
   AB: {
     bpa: 21885,
     lowestRate: 0.1,
+    ageAmount: {
+      maxAmount: 6099,
+      threshold: 45400,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.1,
+    },
+    pensionAmount: {
+      maxAmount: 1685,
+      minAge: 65,
+      creditRate: 0.1,
+    },
     brackets: [
       { limit: 148269, rate: 0.1 },
       { limit: 177922, rate: 0.12 },
@@ -47,6 +83,18 @@ export const provData = {
   MB: {
     bpa: 15780,
     lowestRate: 0.108,
+    ageAmount: {
+      maxAmount: 3728,
+      threshold: 27749,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.108,
+    },
+    pensionAmount: {
+      maxAmount: 1000,
+      minAge: 65,
+      creditRate: 0.108,
+    },
     brackets: [
       { limit: 47000, rate: 0.108 },
       { limit: 100000, rate: 0.1275 },
@@ -56,6 +104,18 @@ export const provData = {
   SK: {
     bpa: 18491,
     lowestRate: 0.105,
+    ageAmount: {
+      maxAmount: 5633,
+      threshold: 41933,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.105,
+    },
+    pensionAmount: {
+      maxAmount: 1000,
+      minAge: 65,
+      creditRate: 0.105,
+    },
     brackets: [
       { limit: 52057, rate: 0.105 },
       { limit: 148734, rate: 0.125 },
@@ -76,6 +136,18 @@ export const provData = {
   NB: {
     bpa: 13044,
     lowestRate: 0.094,
+    ageAmount: {
+      maxAmount: 5878,
+      threshold: 43763,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.094,
+    },
+    pensionAmount: {
+      maxAmount: 1000,
+      minAge: 65,
+      creditRate: 0.094,
+    },
     brackets: [
       { limit: 49958, rate: 0.094 },
       { limit: 99916, rate: 0.14 },
@@ -86,6 +158,18 @@ export const provData = {
   NL: {
     bpa: 10818,
     lowestRate: 0.087,
+    ageAmount: {
+      maxAmount: 6905,
+      threshold: 37842,
+      reductionRate: 0.15,
+      minAge: 65,
+      creditRate: 0.087,
+    },
+    pensionAmount: {
+      maxAmount: 1000,
+      minAge: 65,
+      creditRate: 0.087,
+    },
     brackets: [
       { limit: 43198, rate: 0.087 },
       { limit: 86395, rate: 0.145 },
@@ -112,8 +196,65 @@ export const provData = {
 export const TFSA_ANNUAL_ROOM_BASE = 7000;
 export const RRSP_ANNUAL_MAX_BASE = 32490;
 
-export function calculateTax(income, provCode, inflFactor) {
+const FEDERAL_LOWEST_RATE = 0.15;
+const FEDERAL_AGE_AMOUNT_BASE = 8790;
+const FEDERAL_AGE_AMOUNT_THRESHOLD_BASE = 44325;
+const FEDERAL_AGE_AMOUNT_EXCESS_REDUCTION_RATE = 0.15;
+const FEDERAL_PENSION_AMOUNT_BASE = 2000;
+
+function normalizeTaxContext(taxContext) {
+  if (!taxContext)
+    return {
+      age: 0,
+      eligiblePensionIncome: 0,
+      disableRetirementCredits: false,
+    };
+  return {
+    age: Math.max(0, taxContext.age || 0),
+    eligiblePensionIncome: Math.max(0, taxContext.eligiblePensionIncome || 0),
+    disableRetirementCredits: !!taxContext.disableRetirementCredits,
+  };
+}
+
+function getFederalAgeAmount(income, inflFactor, age) {
+  if (age < 65) return 0;
+
+  const maxAgeAmount = FEDERAL_AGE_AMOUNT_BASE * inflFactor;
+  const reductionThreshold = FEDERAL_AGE_AMOUNT_THRESHOLD_BASE * inflFactor;
+  const reduction = Math.max(0, income - reductionThreshold);
+  return Math.max(
+    0,
+    maxAgeAmount - reduction * FEDERAL_AGE_AMOUNT_EXCESS_REDUCTION_RATE,
+  );
+}
+
+function getProvincialAgeAmount(income, inflFactor, age, ageAmountData) {
+  if (!ageAmountData || age < ageAmountData.minAge) return 0;
+
+  const maxAgeAmount = ageAmountData.maxAmount * inflFactor;
+  const reductionThreshold = ageAmountData.threshold * inflFactor;
+  const reduction = Math.max(0, income - reductionThreshold);
+  return Math.max(0, maxAgeAmount - reduction * ageAmountData.reductionRate);
+}
+
+function getProvincialPensionAmount(
+  inflFactor,
+  age,
+  eligiblePensionIncome,
+  pData,
+) {
+  if (!pData.pensionAmount || age < pData.pensionAmount.minAge) return 0;
+  return Math.min(
+    eligiblePensionIncome,
+    pData.pensionAmount.maxAmount * inflFactor,
+  );
+}
+
+export function calculateTax(income, provCode, inflFactor, taxContext) {
   if (income <= 0) return 0;
+
+  const { age, eligiblePensionIncome, disableRetirementCredits } =
+    normalizeTaxContext(taxContext);
 
   const fedBPA = 15705 * inflFactor;
   const fedBrackets = [
@@ -132,7 +273,18 @@ export function calculateTax(income, provCode, inflFactor) {
       fedTax += (Math.min(income, b.limit) - prevLimit) * b.rate;
     prevLimit = b.limit;
   }
-  fedTax -= fedBPA * 0.15;
+  const federalAgeAmount = disableRetirementCredits
+    ? 0
+    : getFederalAgeAmount(income, inflFactor, age);
+  const federalPensionAmount =
+    !disableRetirementCredits && age >= 65
+      ? Math.min(
+          eligiblePensionIncome,
+          FEDERAL_PENSION_AMOUNT_BASE * inflFactor,
+        )
+      : 0;
+  fedTax -=
+    (fedBPA + federalAgeAmount + federalPensionAmount) * FEDERAL_LOWEST_RATE;
   if (fedTax < 0) fedTax = 0;
 
   // Province tax uses province-specific brackets and BPA/credit rate.
@@ -146,7 +298,16 @@ export function calculateTax(income, provCode, inflFactor) {
       provTax += (Math.min(income, limit) - prevLimit) * b.rate;
     prevLimit = limit;
   }
-  provTax -= provBPA * pData.lowestRate;
+  const provincialAgeAmount = disableRetirementCredits
+    ? 0
+    : getProvincialAgeAmount(income, inflFactor, age, pData.ageAmount);
+  const provincialPensionAmount = disableRetirementCredits
+    ? 0
+    : getProvincialPensionAmount(inflFactor, age, eligiblePensionIncome, pData);
+  provTax -=
+    provBPA * pData.lowestRate +
+    provincialAgeAmount * (pData.ageAmount?.creditRate || 0) +
+    provincialPensionAmount * (pData.pensionAmount?.creditRate || 0);
   if (provTax < 0) provTax = 0;
 
   // Ontario applies provincial surtax on top of basic ON provincial tax.
@@ -170,15 +331,28 @@ export function findGrossDraw(
   incRate,
   provCode,
   inflFactor,
+  taxContext,
+  eligiblePensionRate = 0,
 ) {
   if (neededNet <= 0) return { gross: 0, net: 0, tax: 0, taxableAdd: 0 };
+
+  const baseContext = normalizeTaxContext(taxContext);
+  const getTaxContextWithDraw = (grossDraw) => ({
+    ...baseContext,
+    eligiblePensionIncome:
+      baseContext.eligiblePensionIncome + grossDraw * eligiblePensionRate,
+  });
 
   let low = 0;
   let high = Math.min(neededNet * 5, maxGrossAvailable);
   const maxTaxableAdd = maxGrossAvailable * incRate;
   const maxTax =
-    calculateTax(currentTaxableInc + maxTaxableAdd, provCode, inflFactor) -
-    calculateTax(currentTaxableInc, provCode, inflFactor);
+    calculateTax(
+      currentTaxableInc + maxTaxableAdd,
+      provCode,
+      inflFactor,
+      getTaxContextWithDraw(maxGrossAvailable),
+    ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
   const maxNet = maxGrossAvailable - maxTax;
 
   if (maxNet <= neededNet) {
@@ -195,8 +369,12 @@ export function findGrossDraw(
     const mid = (low + high) / 2;
     const taxAdd = mid * incRate;
     const tax =
-      calculateTax(currentTaxableInc + taxAdd, provCode, inflFactor) -
-      calculateTax(currentTaxableInc, provCode, inflFactor);
+      calculateTax(
+        currentTaxableInc + taxAdd,
+        provCode,
+        inflFactor,
+        getTaxContextWithDraw(mid),
+      ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
     const net = mid - tax;
     if (net < neededNet) low = mid;
     else high = mid;
@@ -205,8 +383,12 @@ export function findGrossDraw(
   const finalGross = (low + high) / 2;
   const finalTaxAdd = finalGross * incRate;
   const finalTax =
-    calculateTax(currentTaxableInc + finalTaxAdd, provCode, inflFactor) -
-    calculateTax(currentTaxableInc, provCode, inflFactor);
+    calculateTax(
+      currentTaxableInc + finalTaxAdd,
+      provCode,
+      inflFactor,
+      getTaxContextWithDraw(finalGross),
+    ) - calculateTax(currentTaxableInc, provCode, inflFactor, baseContext);
   return {
     gross: finalGross,
     net: finalGross - finalTax,

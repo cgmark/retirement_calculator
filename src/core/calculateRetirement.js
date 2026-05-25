@@ -144,6 +144,34 @@ export async function runRetirementCalculation(params) {
     enforceRrifMin,
     effectiveStrategy,
   });
+  const { results: resultsWithoutRetirementCredits } =
+    await runDeterministicProjection({
+      age,
+      retirementAge,
+      rrspStart: rrsp,
+      tfsaStart: tfsa,
+      nonregStart: nonreg,
+      acbStart: currentAcb,
+      baseSpending,
+      activeSchedule,
+      lifeExpectancy,
+      grossEmploymentIncome,
+      inflation,
+      growth,
+      spendingMode,
+      amortizationRate,
+      targetEstateValue,
+      rollingMinSpend,
+      rollingMaxSpend,
+      provCode,
+      cppScenarioAge,
+      selectedCPPMonthly,
+      oasPercent,
+      rrifStartAge,
+      enforceRrifMin,
+      effectiveStrategy,
+      disableRetirementCredits: true,
+    });
 
   let monteCarloResults = null;
   let monteCarloStale = false;
@@ -207,6 +235,7 @@ export async function runRetirementCalculation(params) {
 
   return {
     results,
+    resultsWithoutRetirementCredits,
     monteCarloResults,
     monteCarloStale,
     monteCarloMeta,
