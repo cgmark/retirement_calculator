@@ -1,5 +1,6 @@
 import {
   calculateTax,
+  estimateTerminalEstateTax,
   findGrossDraw,
   RRSP_ANNUAL_MAX_BASE,
   TFSA_ANNUAL_ROOM_BASE,
@@ -362,6 +363,16 @@ export async function runDeterministicProjection(params) {
 
     debugFinalTaxableIncome = currentTaxableIncome;
     const totalAssets = rrsp + tfsa + nonreg;
+    const terminalEstateTax = estimateTerminalEstateTax({
+      taxableIncome: debugFinalTaxableIncome,
+      rrsp,
+      nonreg,
+      acb: currentAcb,
+      provCode,
+      inflFactor: inflationFactor,
+      age: currentAge,
+      disableRetirementCredits,
+    });
     if (netNeeded > 1) isDepleted = true;
 
     results.push({
@@ -383,6 +394,8 @@ export async function runDeterministicProjection(params) {
       nonreg,
       acb: currentAcb,
       total: totalAssets,
+      terminalEstateTax,
+      estateAfterTax: Math.max(0, totalAssets - terminalEstateTax),
       incomeTax: totalIncomeTaxThisYear,
       oasClawback: oasClawbackThisYear,
       mandatoryRrifDraw: mandatoryRrifDrawThisYear,
