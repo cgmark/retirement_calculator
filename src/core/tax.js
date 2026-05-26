@@ -324,6 +324,38 @@ export function calculateTax(income, provCode, inflFactor, taxContext) {
   return fedTax + provTax;
 }
 
+export function estimateTerminalEstateTax({
+  taxableIncome = 0,
+  rrsp = 0,
+  nonreg = 0,
+  acb = 0,
+  provCode,
+  inflFactor,
+  age = 0,
+  disableRetirementCredits = false,
+}) {
+  const remainingRrsp = Math.max(0, rrsp);
+  const remainingNonReg = Math.max(0, nonreg);
+  const remainingAcb = Math.max(0, Math.min(acb, remainingNonReg));
+  const taxableCapitalGain = Math.max(0, remainingNonReg - remainingAcb) * 0.5;
+  const baseIncome = Math.max(0, taxableIncome);
+  const terminalIncome = baseIncome + remainingRrsp + taxableCapitalGain;
+
+  if (terminalIncome <= baseIncome) return 0;
+
+  return Math.max(
+    0,
+    calculateTax(terminalIncome, provCode, inflFactor, {
+      age,
+      disableRetirementCredits,
+    }) -
+      calculateTax(baseIncome, provCode, inflFactor, {
+        age,
+        disableRetirementCredits,
+      }),
+  );
+}
+
 export function findGrossDraw(
   neededNet,
   maxGrossAvailable,

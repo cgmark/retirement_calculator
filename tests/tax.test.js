@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateTax, findGrossDraw } from "../src/core/tax.js";
+import {
+  calculateTax,
+  estimateTerminalEstateTax,
+  findGrossDraw,
+} from "../src/core/tax.js";
 
 describe("calculateTax", () => {
   it("returns zero for non-positive income", () => {
@@ -99,5 +103,53 @@ describe("findGrossDraw", () => {
 
     expect(withCredit.gross).toBeLessThan(withoutCredit.gross);
     expect(withCredit.net).toBeGreaterThan(29900);
+  });
+});
+
+describe("estimateTerminalEstateTax", () => {
+  it("taxes remaining RRSP assets on top of final-year taxable income", () => {
+    const tax = estimateTerminalEstateTax({
+      taxableIncome: 20000,
+      rrsp: 50000,
+      nonreg: 0,
+      acb: 0,
+      provCode: "ON",
+      inflFactor: 1,
+      age: 70,
+    });
+
+    expect(tax).toBeCloseTo(
+      calculateTax(70000, "ON", 1, { age: 70 }) -
+        calculateTax(20000, "ON", 1, { age: 70 }),
+      6,
+    );
+  });
+
+  it("taxes only the unrealized gain portion of non-registered assets", () => {
+    const tax = estimateTerminalEstateTax({
+      taxableIncome: 0,
+      rrsp: 0,
+      nonreg: 100000,
+      acb: 60000,
+      provCode: "BC",
+      inflFactor: 1,
+      age: 65,
+    });
+
+    expect(tax).toBeCloseTo(calculateTax(20000, "BC", 1, { age: 65 }), 6);
+  });
+
+  it("returns zero when remaining assets are fully tax-free or cost-based", () => {
+    expect(
+      estimateTerminalEstateTax({
+        taxableIncome: 0,
+        rrsp: 0,
+        nonreg: 100000,
+        acb: 100000,
+        provCode: "BC",
+        inflFactor: 1,
+        age: 65,
+      }),
+    ).toBe(0);
   });
 });

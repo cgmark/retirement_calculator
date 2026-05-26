@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runDeterministicProjection } from "../src/core/projection.js";
-import { calculateTax } from "../src/core/tax.js";
+import { calculateTax, estimateTerminalEstateTax } from "../src/core/tax.js";
 
 describe("runDeterministicProjection", () => {
   it("contributes surplus in TFSA, RRSP, then non-reg order during working years", async () => {
@@ -331,6 +331,49 @@ describe("runDeterministicProjection", () => {
     expect(results[1].spending).toBeCloseTo(441871.9211822664, 6);
     expect(results[1].total).toBeCloseTo(100000, 6);
     expect(results[1].spending).toBeLessThan(results[0].spending);
+  });
+
+  it("reports final estate net of estimated terminal tax", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 75,
+      retirementAge: 65,
+      rrspStart: 100000,
+      tfsaStart: 50000,
+      nonregStart: 120000,
+      acbStart: 80000,
+      baseSpending: 0,
+      activeSchedule: [],
+      lifeExpectancy: 75,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "BC",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results).toHaveLength(1);
+    const finalRow = results[0];
+    const expectedTerminalTax = estimateTerminalEstateTax({
+      taxableIncome: finalRow.taxableIncome,
+      rrsp: finalRow.rrsp,
+      nonreg: finalRow.nonreg,
+      acb: finalRow.acb,
+      provCode: "BC",
+      inflFactor: 1,
+      age: finalRow.age,
+    });
+
+    expect(finalRow.terminalEstateTax).toBeCloseTo(expectedTerminalTax, 6);
+    expect(finalRow.estateAfterTax).toBeCloseTo(
+      finalRow.total - finalRow.terminalEstateTax,
+      6,
+    );
+    expect(finalRow.estateAfterTax).toBeLessThan(finalRow.total);
   });
 
   it("uses spend-need multipliers in rolling amortization mode", async () => {

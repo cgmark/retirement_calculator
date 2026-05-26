@@ -1475,14 +1475,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const finalRow = results[results.length - 1];
-    const finalEstate = adj(finalRow.total, finalRow.yearIndex);
+    const finalEstateGross = adj(finalRow.total, finalRow.yearIndex);
+    const finalEstateNet = adj(finalRow.estateAfterTax, finalRow.yearIndex);
+    const finalEstateTax = adj(finalRow.terminalEstateTax, finalRow.yearIndex);
     const depleted = finalRow.depleted;
     const totalTaxSavings = Math.max(0, totTaxWithoutCredits - totTax);
 
     document.getElementById("summaryGrid").innerHTML = `
             <div class="summary-box ${depleted ? "alert" : "highlight"}">
-                <div class="summary-title">${depleted ? "Depleted At Age" : "Final Estate Value (Age " + finalRow.age + ")"}</div>
-                <div class="summary-value">${depleted ? finalRow.age : formatCurrency(finalEstate)}</div>
+                <div class="summary-title">${depleted ? "Depleted At Age" : "Final Estate Value Net of Estimated Terminal Tax (Age " + finalRow.age + ")"}</div>
+                <div class="summary-value">${depleted ? finalRow.age : formatCurrency(finalEstateNet)}</div>
+                ${depleted ? "" : `<div class="summary-subtext">Gross estate: ${formatCurrency(finalEstateGross)}<br>Estimated terminal tax: ${formatCurrency(finalEstateTax)}</div>`}
             </div>
             <div class="summary-box">
                 <div class="summary-title">Total Portfolio Drawn</div>
@@ -1536,7 +1539,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `Success probability: ${(monteCarloResults.successRate * 100).toFixed(1)}%`,
         `Failure probability: ${(failRate * 100).toFixed(1)}%`,
         `Median depletion age (failed paths): ${depText}`,
-        `Final estate (P10 / Median / P90): ${formatCurrency(monteCarloResults.p10FinalEstate)} / ${formatCurrency(monteCarloResults.medianFinalEstate)} / ${formatCurrency(monteCarloResults.p90FinalEstate)}`,
+        `Final estate, gross (P10 / Median / P90): ${formatCurrency(monteCarloResults.p10FinalEstate)} / ${formatCurrency(monteCarloResults.medianFinalEstate)} / ${formatCurrency(monteCarloResults.p90FinalEstate)}`,
         `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
         `Last run: ${runAt}`,
         `Settings used (model / trials / return vol / inflation vol / seed): ${monteCarloMeta?.model === "fat-tail" ? "Fat-tail MC" : "Normal MC"} / ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
