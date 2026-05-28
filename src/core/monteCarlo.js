@@ -4,6 +4,10 @@ import {
   RRSP_ANNUAL_MAX_BASE,
   TFSA_ANNUAL_ROOM_BASE,
 } from "./tax.js";
+import {
+  calculateSingleGisBenefit,
+  getApproximateGisIncomeBase,
+} from "./gis.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomShock, percentile } from "./random.js";
 import { getTargetSpendingForYear } from "./spendingPolicy.js";
@@ -43,6 +47,8 @@ export async function runMonteCarlo(params) {
     cppScenarioAge,
     selectedCPPMonthly,
     oasPercent,
+    enableGIS = false,
+    gisInitialPriorYearIncome = 0,
     rrifStartAge,
     enforceRrifMin,
     strategy,
@@ -113,6 +119,7 @@ export async function runMonteCarlo(params) {
     let tfsa = tfsaStart;
     let nonreg = nonregStart;
     let currentAcb = Math.min(acbStart, nonregStart);
+    let priorYearGisIncome = Math.max(0, gisInitialPriorYearIncome);
     let depleted = false;
     let finalAge = age;
     let thisTax = 0;
@@ -157,7 +164,8 @@ export async function runMonteCarlo(params) {
       let oasClawbackThisYear = 0;
       let mandatoryRrifDrawThisYear = 0;
       let grossCPP = 0,
-        grossOAS = 0;
+        grossOAS = 0,
+        grossGIS = 0;
       let employmentIncomeGross = 0;
       let netNeeded = 0;
       let eligiblePensionIncome = 0;
@@ -179,6 +187,14 @@ export async function runMonteCarlo(params) {
         const baseOASMonthly = currentAge >= 75 ? 817.36 : 743.05;
         grossOAS = baseOASMonthly * 12 * oasPercent * inflationFactor;
       }
+      if (enableGIS) {
+        grossGIS = calculateSingleGisBenefit({
+          age: currentAge,
+          grossOAS,
+          priorYearIncome: priorYearGisIncome,
+          inflFactor: inflationFactor,
+        });
+      }
 
       let currentTaxableIncome = grossCPP + grossOAS + employmentIncomeGross;
       const baseTax = calculateTax(
@@ -188,7 +204,7 @@ export async function runMonteCarlo(params) {
         getTaxContext(),
       );
       totalIncomeTaxThisYear += baseTax;
-      let netAvailableIncome = currentTaxableIncome - baseTax;
+      let netAvailableIncome = currentTaxableIncome - baseTax + grossGIS;
 
       if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
         const rrifMinRate = getRrifMinimumRate(currentAge);
@@ -399,6 +415,10 @@ export async function runMonteCarlo(params) {
 
       thisTax += totalIncomeTaxThisYear;
       thisClawback += oasClawbackThisYear;
+      priorYearGisIncome = getApproximateGisIncomeBase({
+        taxableIncome: currentTaxableIncome,
+        grossOAS,
+      });
       yearlyAssets[i] = rrsp + tfsa + nonreg;
 
       finalAge = currentAge;
