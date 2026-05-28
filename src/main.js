@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "cpp70",
     "cppScenario",
     "oasPercent",
+    "enableGIS",
+    "gisInitialPriorYearIncome",
     "rrifStartAge",
     "enforceRrifMin",
     "strategy",
@@ -138,6 +140,10 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("cpp65", readUiFloat("cpp65", 0));
       setInputValueIfChanged("cpp70", readUiFloat("cpp70", 0));
       setInputValueIfChanged("oasPercent", inputs.oasPercent * 100);
+      setInputValueIfChanged(
+        "gisInitialPriorYearIncome",
+        inputs.gisInitialPriorYearIncome,
+      );
       setInputValueIfChanged("rrifStartAge", inputs.rrifStartAge);
       setInputValueIfChanged("mcTrials", inputs.mcTrials);
       setInputValueIfChanged("mcSamplePaths", inputs.mcSamplePaths);
@@ -220,6 +226,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function updateSpendingScheduleVisibility() {
+    const container = document.getElementById("spendingScheduleRows");
+    const emptyState = document.getElementById("spendingScheduleEmptyState");
+    if (!container || !emptyState) return;
+
+    const hasRows = container.querySelectorAll(".spending-row").length > 0;
+    container.style.display = hasRows ? "flex" : "none";
+    emptyState.style.display = hasRows ? "none" : "block";
+  }
+
   function saveSpendingSchedule() {
     try {
       const rows = Array.from(
@@ -233,6 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "retirePlanner_ageAdjustments",
         JSON.stringify(rows),
       );
+      updateSpendingScheduleVisibility();
     } catch (e) {
       console.warn("Local storage unavailable", e);
     }
@@ -252,15 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      // First run/default fallback: seed schedule from current headline inputs.
-      const currentAge = readUiInt("age", SCENARIO_INPUT_DEFAULTS.age);
-      const lifeExpectancy = readUiInt(
-        "lifeExpectancy",
-        SCENARIO_INPUT_DEFAULTS.lifeExpectancy,
-      );
-      container.appendChild(
-        createSpendingScheduleRow(currentAge, lifeExpectancy, 100),
-      );
+      updateSpendingScheduleVisibility();
       return;
     }
 
@@ -272,6 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
         createSpendingScheduleRow(startAge, endAge, amount),
       );
     });
+    updateSpendingScheduleVisibility();
   }
 
   function getValidatedSpendingSchedule() {
@@ -300,9 +310,9 @@ document.addEventListener("DOMContentLoaded", () => {
       lifeExpectancy,
     );
     if (cleaned.length === 0) {
-      statusEl.style.color = "#b91c1c";
+      statusEl.style.color = "#64748b";
       statusEl.innerText =
-        "No valid age adjustments found. Using 100% through all ages.";
+        "No age adjustments configured. Using 100% through all ages.";
       return [];
     }
 
@@ -1187,6 +1197,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Current Assets ($)": false,
       "Canada Pension Plan (CPP)": false,
       "Old Age Security (OAS)": false,
+      "Guaranteed Income Supplement (GIS)": false,
       "RRIF Minimum Withdrawals": false,
       "Withdrawal Strategy": true,
       Simulation: true,
@@ -1424,7 +1435,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("chart2Title").innerText =
       `Gross Income Sources vs Net Target ${strSuffix}${mcSuffix}`;
     document.getElementById("tableSubtitle").innerText = "";
-    document.getElementById("summarySubtitle").innerText = "";
+    const summarySubtitleEl = document.getElementById("summarySubtitle");
+    if (summarySubtitleEl) summarySubtitleEl.innerText = "";
 
     // --- TABLE ---
     const tbody = document.getElementById("tableBody");
@@ -1439,6 +1451,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${formatCurrency(adj(r.spending, r.yearIndex))} ${r.depleted ? '<br><small style="color:red;">(Shortfall)</small>' : ""}</td>
                 <td>${formatCurrency(adj(r.cpp, r.yearIndex))}</td>
                 <td>${formatCurrency(adj(r.oas, r.yearIndex))}</td>
+                <td>${formatCurrency(adj(r.gis || 0, r.yearIndex))}</td>
                 <td>${formatCurrency(adj(r.drawRRSP, r.yearIndex))}</td>
                 <td>${formatCurrency(adj(r.drawTFSA, r.yearIndex))}</td>
                 <td>${formatCurrency(adj(r.drawNonReg, r.yearIndex))}</td>
@@ -1458,6 +1471,7 @@ document.addEventListener("DOMContentLoaded", () => {
       totNonReg = 0,
       totCPP = 0,
       totOAS = 0,
+      totGIS = 0,
       totTax = 0,
       totClawback = 0,
       totTaxWithoutCredits = 0;
@@ -1467,6 +1481,7 @@ document.addEventListener("DOMContentLoaded", () => {
       totNonReg += adj(r.drawNonReg, r.yearIndex);
       totCPP += adj(r.cpp, r.yearIndex);
       totOAS += adj(r.oas, r.yearIndex);
+      totGIS += adj(r.gis || 0, r.yearIndex);
       totTax += adj(r.incomeTax, r.yearIndex);
       totClawback += adj(r.oasClawback, r.yearIndex);
     });
@@ -1480,6 +1495,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const finalEstateTax = adj(finalRow.terminalEstateTax, finalRow.yearIndex);
     const depleted = finalRow.depleted;
     const totalTaxSavings = Math.max(0, totTaxWithoutCredits - totTax);
+    const gisEnabled = document.getElementById("enableGIS")?.checked;
+    const hasAge65Year = results.some((r) => r.age >= 65);
+    const hasOasYear = results.some((r) => (r.oas || 0) > 0);
+
+    if (summarySubtitleEl && gisEnabled && totGIS <= 0.5) {
+      summarySubtitleEl.innerText = !hasAge65Year
+        ? "GIS is enabled, but this projection never reaches age 65."
+        : !hasOasYear
+          ? "GIS is enabled, but OAS is not being received in this projection."
+          : "GIS is enabled, but prior-year income stays high enough that the model pays no GIS.";
+    }
 
     document.getElementById("summaryGrid").innerHTML = `
             <div class="summary-box ${depleted ? "alert" : "highlight"}">
@@ -1492,8 +1518,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="summary-value">${formatCurrency(totRRSP + totTFSA + totNonReg)}</div>
             </div>
             <div class="summary-box">
-                <div class="summary-title">Total CPP + OAS (Gross)</div>
-                <div class="summary-value">${formatCurrency(totCPP + totOAS)}</div>
+                <div class="summary-title">Total CPP + OAS + GIS (Gross)</div>
+                <div class="summary-value">${formatCurrency(totCPP + totOAS + totGIS)}</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-title">Total GIS (Gross)</div>
+                <div class="summary-value">${formatCurrency(totGIS)}</div>
             </div>
             <div class="summary-box alert">
                 <div class="summary-title">Total Income Tax Paid</div>
@@ -1665,6 +1695,7 @@ document.addEventListener("DOMContentLoaded", () => {
       (r) =>
         adj(r.cpp, r.yearIndex) +
         adj(r.oas, r.yearIndex) +
+        adj(r.gis || 0, r.yearIndex) +
         adj(r.drawRRSP, r.yearIndex) +
         adj(r.drawTFSA, r.yearIndex) +
         adj(r.drawNonReg, r.yearIndex),
@@ -1779,6 +1810,12 @@ document.addEventListener("DOMContentLoaded", () => {
               label: "OAS",
               data: results.map((r) => adj(r.oas, r.yearIndex)),
               backgroundColor: cssVar("--color-oas"),
+              order: 1,
+            },
+            {
+              label: "GIS",
+              data: results.map((r) => adj(r.gis || 0, r.yearIndex)),
+              backgroundColor: cssVar("--color-gis"),
               order: 1,
             },
             {
@@ -2013,8 +2050,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (schedContainer) {
     schedContainer.addEventListener("click", (e) => {
       if (e.target.classList.contains("remove-spending-row")) {
-        const rows = schedContainer.querySelectorAll(".spending-row");
-        if (rows.length <= 1) return;
         e.target.closest(".spending-row").remove();
         saveSpendingSchedule();
         recalculateForUiChange();

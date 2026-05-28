@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runDeterministicProjection } from "../src/core/projection.js";
 import { calculateTax, estimateTerminalEstateTax } from "../src/core/tax.js";
+import { GIS_SINGLE_MAX_MONTHLY_BASE } from "../src/core/gis.js";
 
 describe("runDeterministicProjection", () => {
   it("contributes surplus in TFSA, RRSP, then non-reg order during working years", async () => {
@@ -408,5 +409,124 @@ describe("runDeterministicProjection", () => {
     expect(results[0].spending).toBeCloseTo(507389.1625615762, 6);
     expect(results[1].spending).toBeCloseTo(394088.669950739, 6);
     expect(results[1].drawTFSA).toBeCloseTo(394088.669950739, 6);
+  });
+
+  it("pays approximate single-person GIS when enabled and OAS is present", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 65,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 0,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 0,
+      activeSchedule: [],
+      lifeExpectancy: 65,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 1,
+      enableGIS: true,
+      gisInitialPriorYearIncome: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].gis).toBeCloseTo(GIS_SINGLE_MAX_MONTHLY_BASE * 12, 6);
+  });
+
+  it("does not pay GIS without OAS", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 65,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 0,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 0,
+      activeSchedule: [],
+      lifeExpectancy: 65,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 0,
+      enableGIS: true,
+      gisInitialPriorYearIncome: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results[0].gis).toBe(0);
+  });
+
+  it("carries prior-year income forward for GIS", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 65,
+      retirementAge: 65,
+      rrspStart: 50000,
+      tfsaStart: 0,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 50000,
+      activeSchedule: [],
+      lifeExpectancy: 66,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 1,
+      enableGIS: true,
+      gisInitialPriorYearIncome: 0,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "rrsp-tfsa-nonreg",
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].gis).toBeGreaterThan(0);
+    expect(results[0].gisIncomeBasis).toBeCloseTo(
+      results[0].taxableIncome - results[0].oas,
+      6,
+    );
+    expect(results[1].gis).toBe(0);
+  });
+
+  it("uses the initial prior-year GIS income override", async () => {
+    const { results } = await runDeterministicProjection({
+      age: 65,
+      retirementAge: 65,
+      rrspStart: 0,
+      tfsaStart: 0,
+      nonregStart: 0,
+      acbStart: 0,
+      baseSpending: 0,
+      activeSchedule: [],
+      lifeExpectancy: 65,
+      grossEmploymentIncome: 0,
+      inflation: 0,
+      growth: 0,
+      provCode: "ON",
+      cppScenarioAge: 65,
+      selectedCPPMonthly: 0,
+      oasPercent: 1,
+      enableGIS: true,
+      gisInitialPriorYearIncome: 30000,
+      rrifStartAge: 72,
+      enforceRrifMin: false,
+      effectiveStrategy: "tfsa-rrsp-nonreg",
+    });
+
+    expect(results[0].gis).toBe(0);
   });
 });

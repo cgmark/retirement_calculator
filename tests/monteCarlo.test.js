@@ -336,4 +336,18 @@ describe("runMonteCarlo", () => {
 
     expect(oversizedAcb).toEqual(clampedAcb);
   });
+
+  it("runs with GIS enabled and remains deterministic under a fixed seed", async () => {
+    const params = baseParams({
+      enableGIS: true,
+      gisInitialPriorYearIncome: 0,
+      seed: 919,
+      trials: 40,
+    });
+    const a = await runMonteCarlo(params);
+    const b = await runMonteCarlo(params);
+
+    expect(a).toEqual(b);
+    expect(a.trials).toBe(40);
+  });
 });

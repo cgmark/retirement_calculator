@@ -19,6 +19,7 @@
         --color-nonreg: #e69f00;
         --color-cpp: #56b4e9;
         --color-oas: #cc79a7;
+        --color-gis: #0096c7;
       }
 
       body {
@@ -558,6 +559,13 @@
                     id="spendingScheduleRows"
                     style="display: flex; flex-direction: column; gap: 8px"
                   ></div>
+                  <div
+                    id="spendingScheduleEmptyState"
+                    style="font-size: 0.8rem; color: #64748b"
+                  >
+                    No age adjustments configured. Add a row to change spending
+                    for a specific age range.
+                  </div>
                   <button
                     type="button"
                     id="addSpendingRow"
@@ -680,6 +688,37 @@
                   max="100"
                   min="0"
                 />
+              </div>
+            </div>
+
+            <div class="input-section">
+              <h4>Guaranteed Income Supplement (GIS)</h4>
+              <div class="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    id="enableGIS"
+                    style="width: auto; margin-right: 8px"
+                  />
+                  Model GIS for a single person
+                </label>
+              </div>
+              <div class="form-group">
+                <label
+                  title="Approximate prior-year income used for the first GIS year in the projection."
+                >
+                  Initial Prior-Year Income for GIS
+                </label>
+                <input
+                  type="number"
+                  id="gisInitialPriorYearIncome"
+                  value="0"
+                  min="0"
+                />
+              </div>
+              <div style="font-size: 0.8rem; color: #64748b">
+                Approximation: single-person GIS only, using prior-year income
+                and published maximum/cutoff values.
               </div>
             </div>
 
@@ -969,6 +1008,71 @@
 
         <!-- Charts Column -->
         <div class="charts-container">
+          <div class="card result-card collapsible" id="baselineBalanceCard">
+            <h3
+              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
+              id="chart1Title"
+            >
+              Asset Balances Over Time
+            </h3>
+            <div class="result-body">
+              <div class="chart-wrapper">
+                <canvas id="balanceChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="card result-card collapsible" id="baselineIncomeCard">
+            <h3
+              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
+              id="chart2Title"
+            >
+              Gross Income Sources vs Net Target
+            </h3>
+            <div class="result-body">
+              <div class="chart-wrapper">
+                <canvas id="incomeChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="card result-card collapsible"
+            id="mcSpendPercentileCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Simulation Spending Percentiles Over Time
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcSpendPercentileSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcSpendPercentileChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="card result-card collapsible"
+            id="mcPercentileCard"
+            style="display: none"
+          >
+            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
+              Simulation Asset Percentiles Over Time
+            </h3>
+            <div class="result-body">
+              <div
+                id="mcPercentileSubtitle"
+                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+              ></div>
+              <div class="chart-wrapper">
+                <canvas id="mcPercentileChart"></canvas>
+              </div>
+            </div>
+          </div>
+
           <div
             class="card result-card collapsible"
             id="mcSamplePathControlsCard"
@@ -1024,44 +1128,6 @@
             </div>
           </div>
 
-          <div
-            class="card result-card collapsible"
-            id="mcSpendPercentileCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Spending Percentiles Over Time
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcSpendPercentileSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcSpendPercentileChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="card result-card collapsible"
-            id="mcPercentileCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Asset Percentiles Over Time
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcPercentileSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcPercentileChart"></canvas>
-              </div>
-            </div>
-          </div>
-
           <!-- Summary Box -->
           <div class="card result-card collapsible" id="summaryCard">
             <h3 style="margin-top: 0; margin-bottom: 15px">
@@ -1087,33 +1153,6 @@
                   font-size: 0.85rem;
                 "
               ></div>
-            </div>
-          </div>
-
-          <div class="card result-card collapsible" id="baselineBalanceCard">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart1Title"
-            >
-              Asset Balances Over Time
-            </h3>
-            <div class="result-body">
-              <div class="chart-wrapper">
-                <canvas id="balanceChart"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="card result-card collapsible" id="baselineIncomeCard">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart2Title"
-            >
-              Gross Income Sources vs Net Target
-            </h3>
-            <div class="result-body">
-              <div class="chart-wrapper">
-                <canvas id="incomeChart"></canvas>
-              </div>
             </div>
           </div>
 
@@ -1153,7 +1192,7 @@
                     <tr>
                       <th rowspan="2">Age</th>
                       <th rowspan="2">Target Spend<br />(Net)</th>
-                      <th colspan="5" class="group-header">
+                      <th colspan="6" class="group-header">
                         Gross Withdrawals & Income Sources
                       </th>
                       <th colspan="2" class="group-header">Taxes</th>
@@ -1164,6 +1203,7 @@
                     <tr>
                       <th>CPP</th>
                       <th>OAS</th>
+                      <th>GIS</th>
                       <th>RRSP Draw</th>
                       <th>TFSA Draw</th>
                       <th>Non-Reg Draw</th>

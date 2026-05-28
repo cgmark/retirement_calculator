@@ -3,6 +3,8 @@ import { runRetirementCalculation } from "../src/core/calculateRetirement.js";
 
 describe("runRetirementCalculation", () => {
   it("flags infeasible solve targets without overwriting spending", async () => {
+    const monteCarloCalls = [];
+    const deterministicCalls = [];
     const outcome = await runRetirementCalculation({
       inputs: {
         age: 65,
@@ -24,6 +26,8 @@ describe("runRetirementCalculation", () => {
         cppScenarioAge: 65,
         selectedCPPMonthly: 0,
         oasPercent: 0,
+        enableGIS: true,
+        gisInitialPriorYearIncome: 9000,
         rrifStartAge: 72,
         enforceRrifMin: true,
         strategy: "tfsa-rrsp-nonreg",
@@ -37,36 +41,51 @@ describe("runRetirementCalculation", () => {
       },
       runMonteCarloNow: true,
       lastMonteCarloResults: null,
-      runMonteCarlo: async ({ trials, mcModel }) => ({
-        model: mcModel,
-        successRate: 0.1,
-        cancelled: false,
+      runMonteCarlo: async ({
         trials,
-        requestedTrials: trials,
-      }),
+        mcModel,
+        enableGIS,
+        gisInitialPriorYearIncome,
+      }) => {
+        monteCarloCalls.push({ enableGIS, gisInitialPriorYearIncome });
+        return {
+          model: mcModel,
+          successRate: 0.1,
+          cancelled: false,
+          trials,
+          requestedTrials: trials,
+        };
+      },
       solveSustainableSpending: async () => Number.NaN,
-      runDeterministicProjection: async () => ({
-        results: [
-          {
-            age: 65,
-            yearIndex: 0,
-            total: 1,
-            depleted: false,
-            spending: 60000,
-            cpp: 0,
-            oas: 0,
-            drawRRSP: 0,
-            drawTFSA: 0,
-            drawNonReg: 0,
-            incomeTax: 0,
-            oasClawback: 0,
-            rrsp: 0,
-            tfsa: 0,
-            nonreg: 0,
-            acb: 0,
-          },
-        ],
-      }),
+      runDeterministicProjection: async (params) => {
+        deterministicCalls.push({
+          enableGIS: params.enableGIS,
+          gisInitialPriorYearIncome: params.gisInitialPriorYearIncome,
+        });
+        return {
+          results: [
+            {
+              age: 65,
+              yearIndex: 0,
+              total: 1,
+              depleted: false,
+              spending: 60000,
+              cpp: 0,
+              oas: 0,
+              gis: 0,
+              drawRRSP: 0,
+              drawTFSA: 0,
+              drawNonReg: 0,
+              incomeTax: 0,
+              oasClawback: 0,
+              rrsp: 0,
+              tfsa: 0,
+              nonreg: 0,
+              acb: 0,
+            },
+          ],
+        };
+      },
       formatCurrency: (n) => `$${Math.round(n)}`,
       shouldCancel: () => false,
     });
@@ -75,5 +94,12 @@ describe("runRetirementCalculation", () => {
     expect(outcome.solvedSpendOutput).toBeNull();
     expect(outcome.baseSpending).toBe(60000);
     expect(outcome.monteCarloMeta?.model).toBe("fat-tail");
+    expect(monteCarloCalls).toEqual([
+      { enableGIS: true, gisInitialPriorYearIncome: 9000 },
+    ]);
+    expect(deterministicCalls).toEqual([
+      { enableGIS: true, gisInitialPriorYearIncome: 9000 },
+      { enableGIS: true, gisInitialPriorYearIncome: 9000 },
+    ]);
   });
 });

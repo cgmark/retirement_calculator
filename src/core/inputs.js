@@ -18,6 +18,7 @@ export const SCENARIO_INPUT_DEFAULTS = {
   cppScenarioAge: 65,
   cppMonthly: 0,
   oasPercent: 100,
+  gisInitialPriorYearIncome: 0,
   rrifStartAge: 72,
   mcTrials: 1000,
   mcSamplePaths: 10,
@@ -119,6 +120,14 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
 
   const oasPercent =
     readFloat("oasPercent", SCENARIO_INPUT_DEFAULTS.oasPercent) / 100;
+  const enableGIS = doc.getElementById("enableGIS")?.checked ?? false;
+  const gisInitialPriorYearIncome = Math.max(
+    0,
+    readFloat(
+      "gisInitialPriorYearIncome",
+      SCENARIO_INPUT_DEFAULTS.gisInitialPriorYearIncome,
+    ),
+  );
   const rrifStartAge = readInt(
     "rrifStartAge",
     SCENARIO_INPUT_DEFAULTS.rrifStartAge,
@@ -190,6 +199,8 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     cppScenarioAge,
     selectedCPPMonthly,
     oasPercent,
+    enableGIS,
+    gisInitialPriorYearIncome,
     rrifStartAge,
     enforceRrifMin,
     strategy,

@@ -27,6 +27,8 @@ function buildDoc(overrides = {}) {
     cpp65: "",
     cpp70: "",
     oasPercent: "",
+    enableGIS: false,
+    gisInitialPriorYearIncome: "",
     rrifStartAge: "",
     enforceRrifMin: "yes",
     strategy: "tfsa-rrsp-nonreg",
@@ -68,8 +70,20 @@ describe("readScenarioInputs", () => {
     expect(inputs.lifeExpectancy).toBe(100);
     expect(inputs.inflation).toBe(0.025);
     expect(inputs.growth).toBe(0.055);
+    expect(inputs.enableGIS).toBe(false);
+    expect(inputs.gisInitialPriorYearIncome).toBe(0);
     expect(inputs.mcTrials).toBe(1000);
     expect(inputs.mcModel).toBe("normal");
+  });
+
+  it("reads GIS settings", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({ enableGIS: true, gisInitialPriorYearIncome: "12000" }),
+      () => [],
+    );
+
+    expect(inputs.enableGIS).toBe(true);
+    expect(inputs.gisInitialPriorYearIncome).toBe(12000);
   });
 
   it("reads the selected Monte Carlo model", () => {

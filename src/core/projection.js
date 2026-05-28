@@ -5,6 +5,10 @@ import {
   RRSP_ANNUAL_MAX_BASE,
   TFSA_ANNUAL_ROOM_BASE,
 } from "./tax.js";
+import {
+  calculateSingleGisBenefit,
+  getApproximateGisIncomeBase,
+} from "./gis.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { getTargetSpendingForYear } from "./spendingPolicy.js";
 import {
@@ -34,6 +38,8 @@ export async function runDeterministicProjection(params) {
     cppScenarioAge,
     selectedCPPMonthly,
     oasPercent,
+    enableGIS = false,
+    gisInitialPriorYearIncome = 0,
     rrifStartAge,
     enforceRrifMin,
     effectiveStrategy,
@@ -49,6 +55,7 @@ export async function runDeterministicProjection(params) {
   let tfsa = tfsaStart;
   let nonreg = nonregStart;
   let currentAcb = Math.min(acbStart, nonregStart);
+  let priorYearGisIncome = Math.max(0, gisInitialPriorYearIncome);
   const yearlyInflation = Math.max(-0.03, Math.min(0.2, inflation));
 
   const results = [];
@@ -81,6 +88,7 @@ export async function runDeterministicProjection(params) {
 
     let grossCPP = 0;
     let grossOAS = 0;
+    let grossGIS = 0;
     let drawRRSP = 0;
     let drawTFSA = 0;
     let drawNonReg = 0;
@@ -104,6 +112,14 @@ export async function runDeterministicProjection(params) {
       const baseOASMonthly = currentAge >= 75 ? 817.36 : 743.05;
       grossOAS = baseOASMonthly * 12 * oasPercent * inflationFactor;
     }
+    if (enableGIS) {
+      grossGIS = calculateSingleGisBenefit({
+        age: currentAge,
+        grossOAS,
+        priorYearIncome: priorYearGisIncome,
+        inflFactor: inflationFactor,
+      });
+    }
 
     const isWorkingYear = currentAge < retirementAge;
     if (isWorkingYear) {
@@ -118,10 +134,10 @@ export async function runDeterministicProjection(params) {
       getTaxContext(),
     );
     totalIncomeTaxThisYear += baseTax;
-    let netAvailableIncome = currentTaxableIncome - baseTax;
+    let netAvailableIncome = currentTaxableIncome - baseTax + grossGIS;
     employmentIncomeNet = Math.max(
       0,
-      netAvailableIncome - (grossCPP + grossOAS),
+      netAvailableIncome - (grossCPP + grossOAS + grossGIS),
     );
 
     if (enforceRrifMin && currentAge >= rrifStartAge && rrsp > 0) {
@@ -194,7 +210,9 @@ export async function runDeterministicProjection(params) {
 
       employmentIncomeNet = Math.max(
         0,
-        currentTaxableIncome - totalIncomeTaxThisYear - (grossCPP + grossOAS),
+        currentTaxableIncome -
+          totalIncomeTaxThisYear -
+          (grossCPP + grossOAS + grossGIS),
       );
 
       contribNonReg = Math.max(0, surplus);
@@ -362,6 +380,10 @@ export async function runDeterministicProjection(params) {
     }
 
     debugFinalTaxableIncome = currentTaxableIncome;
+    priorYearGisIncome = getApproximateGisIncomeBase({
+      taxableIncome: debugFinalTaxableIncome,
+      grossOAS,
+    });
     const totalAssets = rrsp + tfsa + nonreg;
     const terminalEstateTax = estimateTerminalEstateTax({
       taxableIncome: debugFinalTaxableIncome,
@@ -381,6 +403,7 @@ export async function runDeterministicProjection(params) {
       spending: targetSpending,
       cpp: grossCPP,
       oas: grossOAS,
+      gis: grossGIS,
       drawRRSP,
       drawTFSA,
       drawNonReg,
@@ -401,6 +424,7 @@ export async function runDeterministicProjection(params) {
       mandatoryRrifDraw: mandatoryRrifDrawThisYear,
       netShortfall: netNeeded,
       taxableIncome: debugFinalTaxableIncome,
+      gisIncomeBasis: priorYearGisIncome,
       clawbackIterations: debugClawbackIterations,
       mixTFSA: null,
       mixNonReg: null,
