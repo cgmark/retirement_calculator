@@ -718,7 +718,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "none"
         : "0 0 0 2px rgba(15,118,110,0.14)";
       button.addEventListener("click", () => {
-        if (hiddenSamplePathIndices.has(index)) hiddenSamplePathIndices.delete(index);
+        if (hiddenSamplePathIndices.has(index))
+          hiddenSamplePathIndices.delete(index);
         else hiddenSamplePathIndices.add(index);
         refreshMonteCarloSampleViews();
       });
@@ -1386,10 +1387,8 @@ document.addEventListener("DOMContentLoaded", () => {
         })
       : [];
 
-    document.getElementById("chart1Title").innerText =
-      "Assets";
-    document.getElementById("chart2Title").innerText =
-      "Spending";
+    document.getElementById("chart1Title").innerText = "Assets";
+    document.getElementById("chart2Title").innerText = "Spending";
     document.getElementById("tableSubtitle").innerText = "";
     const summarySubtitleEl = document.getElementById("summarySubtitle");
     if (summarySubtitleEl) summarySubtitleEl.innerText = "";
