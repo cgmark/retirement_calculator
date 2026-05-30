@@ -14,7 +14,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // UI-level state: keep long-running calc/MC interactions responsive and cancellable.
   let balanceChartInst = null;
   let incomeChartInst = null;
-  let mcOutcomeChartInst = null;
   let mcPercentileChartInst = null;
   let mcSpendPercentileChartInst = null;
   let mcSampleAssetChartInst = null;
@@ -376,82 +375,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return cleaned;
   }
 
-  function renderMonteCarloOutcomeChart(monteCarloResults) {
-    const mcCard = document.getElementById("mcOutcomeCard");
-    const mcSubtitle = document.getElementById("mcChartSubtitle");
-    if (!mcCard || !mcSubtitle) return;
-
-    if (
-      !monteCarloResults ||
-      !monteCarloResults.trials ||
-      monteCarloResults.trials <= 0
-    ) {
-      if (mcOutcomeChartInst) {
-        mcOutcomeChartInst.destroy();
-        mcOutcomeChartInst = null;
-      }
-      mcCard.style.display = "none";
-      mcSubtitle.innerText = "";
-      return;
-    }
-
-    mcCard.style.display = "block";
-    const bucketLabels = monteCarloResults.bucketLabels || [];
-    const counts = bucketLabels.map(
-      (l) => monteCarloResults.bucketCounts?.[l] || 0,
-    );
-    const percents = counts.map((c) => (c / monteCarloResults.trials) * 100);
-    mcSubtitle.innerText = `Based on ${monteCarloResults.trials.toLocaleString()} / ${monteCarloResults.requestedTrials.toLocaleString()} trials${monteCarloResults.cancelled ? " (partial run)" : ""}`;
-
-    if (!mcOutcomeChartInst) {
-      mcOutcomeChartInst = new Chart(
-        document.getElementById("mcOutcomeChart").getContext("2d"),
-        {
-          type: "bar",
-          data: {
-            labels: bucketLabels,
-            datasets: [
-              {
-                label: "Trial Share (%)",
-                data: percents,
-                backgroundColor: bucketLabels.map((l) =>
-                  l.includes("(Success)") ? "#16a34a" : "#f59e0b",
-                ),
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: (ctx) =>
-                    `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`,
-                },
-              },
-            },
-            scales: {
-              x: { ticks: { maxRotation: 0, minRotation: 0 } },
-              y: { beginAtZero: true, ticks: { callback: (v) => `${v}%` } },
-            },
-          },
-        },
-      );
-      return;
-    }
-
-    mcOutcomeChartInst.data.labels = bucketLabels;
-    mcOutcomeChartInst.data.datasets[0].data = percents;
-    mcOutcomeChartInst.data.datasets[0].backgroundColor = bucketLabels.map(
-      (l) => (l.includes("(Success)") ? "#16a34a" : "#f59e0b"),
-    );
-    mcOutcomeChartInst.options.plugins.tooltip.callbacks.label = (ctx) =>
-      `${ctx.parsed.y.toFixed(1)}% (${counts[ctx.dataIndex].toLocaleString()} trials)`;
-    mcOutcomeChartInst.update("none");
-  }
-
   function renderMonteCarloPercentileChart(monteCarloResults) {
     const card = document.getElementById("mcPercentileCard");
     const subtitle = document.getElementById("mcPercentileSubtitle");
@@ -466,12 +389,14 @@ document.addEventListener("DOMContentLoaded", () => {
         mcPercentileChartInst.destroy();
         mcPercentileChartInst = null;
       }
-      card.style.display = "none";
+      updateCardVisibility("mcPercentileCard", false);
+      updateCardVisibility("mcPercentilesCard", false);
       subtitle.innerText = "";
       return;
     }
 
-    card.style.display = "block";
+    updateCardVisibility("mcPercentileCard", true);
+    updateCardVisibility("mcPercentilesCard", true);
     const displayInflated = document.getElementById("displayMode").checked;
     const baseInflation =
       readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
@@ -547,6 +472,9 @@ document.addEventListener("DOMContentLoaded", () => {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
+        legend: {
+          display: false,
+        },
         tooltip: {
           callbacks: {
             label: (ctx) =>
@@ -594,12 +522,14 @@ document.addEventListener("DOMContentLoaded", () => {
         mcSpendPercentileChartInst.destroy();
         mcSpendPercentileChartInst = null;
       }
-      card.style.display = "none";
+      updateCardVisibility("mcSpendPercentileCard", false);
+      updateCardVisibility("mcPercentilesCard", false);
       subtitle.innerText = "";
       return;
     }
 
-    card.style.display = "block";
+    updateCardVisibility("mcSpendPercentileCard", true);
+    updateCardVisibility("mcPercentilesCard", true);
     const displayInflated = document.getElementById("displayMode").checked;
     const baseInflation =
       readUiFloat("inflation", SCENARIO_INPUT_DEFAULTS.inflationPct) / 100;
@@ -670,6 +600,9 @@ document.addEventListener("DOMContentLoaded", () => {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
+        legend: {
+          display: false,
+        },
         tooltip: {
           callbacks: {
             label: (ctx) =>
@@ -727,16 +660,21 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMonteCarloSampleSpendChart(activeMonteCarloResults);
   }
 
+  function updateCardVisibility(cardId, isVisible) {
+    const card = document.getElementById(cardId);
+    if (card) card.style.display = isVisible ? "block" : "none";
+  }
+
   function renderMonteCarloSamplePathControls(monteCarloResults) {
     activeMonteCarloResults = monteCarloResults;
-    const card = document.getElementById("mcSamplePathControlsCard");
+    const card = document.getElementById("mcSamplePathsCard");
     const controlsEl = document.getElementById("mcSamplePathControls");
     const subtitleEl = document.getElementById("mcSamplePathControlsSubtitle");
     if (!card || !controlsEl || !subtitleEl) return;
 
     const pathCount = getSamplePathCount(monteCarloResults);
     if (!monteCarloResults || !monteCarloResults.trials || pathCount === 0) {
-      card.style.display = "none";
+      updateCardVisibility("mcSamplePathsCard", false);
       controlsEl.innerHTML = "";
       subtitleEl.innerText = "";
       hiddenSamplePathIndices = new Set();
@@ -744,55 +682,47 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     pruneSamplePathVisibility(pathCount);
-    card.style.display = "block";
+    updateCardVisibility("mcSamplePathsCard", true);
     const visibleCount = pathCount - hiddenSamplePathIndices.size;
     subtitleEl.innerText = `${visibleCount.toLocaleString()} of ${pathCount.toLocaleString()} sampled path pairs visible. Each toggle applies to the matching asset and spending path.`;
 
     controlsEl.innerHTML = `
-      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-        <button type="button" id="showAllSamplePaths" style="background:#0f766e;">Show all</button>
-        <button type="button" id="hideAllSamplePaths" style="background:#475569;">Hide all</button>
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-bottom:10px;">
+        <button type="button" id="showAllSamplePaths" style="background:#0f766e; margin-top:0; padding:10px 12px; font-size:0.9rem;">Show all</button>
+        <button type="button" id="hideAllSamplePaths" style="background:#475569; margin-top:0; padding:10px 12px; font-size:0.9rem;">Hide all</button>
       </div>
       <div style="display:flex; flex-wrap:wrap; gap:8px;"></div>
     `;
 
     const buttonsRow = controlsEl.lastElementChild;
     for (let index = 0; index < pathCount; index++) {
-      const label = document.createElement("label");
-      label.style.display = "inline-flex";
-      label.style.alignItems = "center";
-      label.style.gap = "8px";
-      label.style.padding = "6px 10px";
-      label.style.border = "1px solid #cbd5e1";
-      label.style.borderRadius = "999px";
-      label.style.background = "#fff";
-      label.style.fontSize = "0.85rem";
-      label.style.cursor = "pointer";
-
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.checked = !hiddenSamplePathIndices.has(index);
-      input.style.width = "auto";
-      input.addEventListener("change", () => {
-        if (input.checked) hiddenSamplePathIndices.delete(index);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = `Path ${index + 1}`;
+      button.setAttribute("aria-label", `Toggle path ${index + 1}`);
+      button.setAttribute(
+        "aria-pressed",
+        hiddenSamplePathIndices.has(index) ? "false" : "true",
+      );
+      button.style.width = "36px";
+      button.style.height = "36px";
+      button.style.minWidth = "36px";
+      button.style.padding = "0";
+      button.style.marginTop = "0";
+      button.style.border = "2px solid #cbd5e1";
+      button.style.borderRadius = "999px";
+      button.style.background = getSamplePathStroke(index, pathCount);
+      button.style.cursor = "pointer";
+      button.style.opacity = hiddenSamplePathIndices.has(index) ? "0.28" : "1";
+      button.style.boxShadow = hiddenSamplePathIndices.has(index)
+        ? "none"
+        : "0 0 0 2px rgba(15,118,110,0.14)";
+      button.addEventListener("click", () => {
+        if (hiddenSamplePathIndices.has(index)) hiddenSamplePathIndices.delete(index);
         else hiddenSamplePathIndices.add(index);
         refreshMonteCarloSampleViews();
       });
-
-      const swatch = document.createElement("span");
-      swatch.style.display = "inline-block";
-      swatch.style.width = "12px";
-      swatch.style.height = "12px";
-      swatch.style.borderRadius = "999px";
-      swatch.style.background = getSamplePathStroke(index, pathCount);
-
-      const text = document.createElement("span");
-      text.innerText = `Path ${index + 1}`;
-
-      label.appendChild(input);
-      label.appendChild(swatch);
-      label.appendChild(text);
-      buttonsRow.appendChild(label);
+      buttonsRow.appendChild(button);
     }
 
     document
@@ -837,12 +767,14 @@ document.addEventListener("DOMContentLoaded", () => {
         chartRef.destroy();
         assignChart(null);
       }
-      card.style.display = "none";
+      updateCardVisibility(cardId, false);
+      updateCardVisibility("mcSamplePathsCard", false);
       subtitle.innerText = "";
       return;
     }
 
-    card.style.display = "block";
+    updateCardVisibility(cardId, true);
+    updateCardVisibility("mcSamplePathsCard", true);
     pruneSamplePathVisibility(samplePaths.length);
     const displayInflated = document.getElementById("displayMode").checked;
     const baseInflation =
@@ -866,7 +798,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = {
       labels,
       datasets: visiblePaths.map(({ series, index }) => ({
-        label: `Path ${index + 1}`,
+        label: "",
+        pathIndex: index,
         data: series,
         borderColor: getSamplePathStroke(index, adjustedPaths.length),
         borderWidth: 1.8,
@@ -880,10 +813,13 @@ document.addEventListener("DOMContentLoaded", () => {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
+        legend: {
+          display: false,
+        },
         tooltip: {
           callbacks: {
             label: (ctx) =>
-              `${ctx.dataset.label}: ${new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(ctx.parsed.y)}`,
+              `Path ${ctx.dataset.pathIndex + 1}: ${new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(ctx.parsed.y)}`,
           },
         },
       },
@@ -1025,28 +961,6 @@ document.addEventListener("DOMContentLoaded", () => {
             runStatusEl.innerText = `Running simulation: ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`;
             setRunButtonState({ running: true });
           }
-          renderMonteCarloOutcomeChart({
-            // Render partial MC snapshots so users can see convergence in real time.
-            trials: done,
-            requestedTrials: total,
-            cancelled: false,
-            bucketLabels,
-            bucketCounts,
-            ageLabels,
-            assetP10,
-            assetP25,
-            assetP50,
-            assetP75,
-            assetP90,
-            spendP10,
-            spendP25,
-            spendP50,
-            spendP75,
-            spendP90,
-            sampleAssetPaths,
-            sampleSpendPaths,
-            sampleInflationPaths,
-          });
           renderMonteCarloPercentileChart({
             trials: done,
             requestedTrials: total,
@@ -1204,7 +1118,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const box = document.getElementById("mcSettingsBox");
     if (box) box.style.display = enabled ? "block" : "none";
     if (!enabled) {
-      renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
       renderMonteCarloSamplePathControls(null);
@@ -1214,7 +1127,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (lastMonteCarloResults) {
-      renderMonteCarloOutcomeChart(lastMonteCarloResults);
       renderMonteCarloPercentileChart(lastMonteCarloResults);
       renderMonteCarloSpendPercentileChart(lastMonteCarloResults);
       renderMonteCarloSamplePathControls(lastMonteCarloResults);
@@ -1325,7 +1237,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (nowOpen) {
           balanceChartInst?.resize();
           incomeChartInst?.resize();
-          mcOutcomeChartInst?.resize();
           mcPercentileChartInst?.resize();
           mcSpendPercentileChartInst?.resize();
           mcSampleAssetChartInst?.resize();
@@ -1436,7 +1347,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       document.getElementById("tableBody").innerHTML = "";
       document.getElementById("summaryGrid").innerHTML = "";
-      renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
       renderMonteCarloSamplePathControls(null);
@@ -1476,14 +1386,10 @@ document.addEventListener("DOMContentLoaded", () => {
         })
       : [];
 
-    const strSuffix = displayInflated
-      ? "(Inflated/Nominal Dollars)"
-      : "(Today's Dollars)";
-    const mcSuffix = monteCarloEnabled ? " - Baseline Path" : "";
     document.getElementById("chart1Title").innerText =
-      `Asset Balances Over Time ${strSuffix}${mcSuffix}`;
+      "Assets";
     document.getElementById("chart2Title").innerText =
-      `Gross Income Sources vs Net Target ${strSuffix}${mcSuffix}`;
+      "Spending";
     document.getElementById("tableSubtitle").innerText = "";
     const summarySubtitleEl = document.getElementById("summarySubtitle");
     if (summarySubtitleEl) summarySubtitleEl.innerText = "";
@@ -1653,14 +1559,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (monteCarloEnabled) {
-      renderMonteCarloOutcomeChart(monteCarloResults);
       renderMonteCarloPercentileChart(monteCarloResults);
       renderMonteCarloSpendPercentileChart(monteCarloResults);
       renderMonteCarloSamplePathControls(monteCarloResults);
       renderMonteCarloSampleAssetChart(monteCarloResults);
       renderMonteCarloSampleSpendChart(monteCarloResults);
     } else {
-      renderMonteCarloOutcomeChart(null);
       renderMonteCarloPercentileChart(null);
       renderMonteCarloSpendPercentileChart(null);
       renderMonteCarloSamplePathControls(null);

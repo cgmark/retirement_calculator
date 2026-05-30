@@ -75,8 +75,26 @@
         gap: 20px;
         min-width: 0;
       }
+      .chart-pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
       .charts-container .card {
         min-width: 0;
+      }
+      .result-body-group {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .chart-panel {
+        min-width: 0;
+      }
+      .chart-panel-title {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
       }
       #summaryCard {
         order: -100;
@@ -326,6 +344,9 @@
       }
       @media (max-width: 900px) {
         .dashboard {
+          grid-template-columns: 1fr;
+        }
+        .chart-pair {
           grid-template-columns: 1fr;
         }
         .chart-wrapper {
@@ -1036,122 +1057,91 @@
 
         <!-- Charts Column -->
         <div class="charts-container">
-          <div class="card result-card collapsible" id="baselineBalanceCard">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart1Title"
-            >
-              Asset Balances Over Time
-            </h3>
-            <div class="result-body">
-              <div class="chart-wrapper">
-                <canvas id="balanceChart"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="card result-card collapsible" id="baselineIncomeCard">
-            <h3
-              style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem"
-              id="chart2Title"
-            >
-              Gross Income Sources vs Net Target
-            </h3>
-            <div class="result-body">
-              <div class="chart-wrapper">
-                <canvas id="incomeChart"></canvas>
+          <div class="card result-card collapsible" id="baselineChartsCard">
+            <h3 style="margin-top: 0; margin-bottom: 10px">Baseline Graphs</h3>
+            <div class="result-body result-body-group">
+              <div class="chart-pair">
+                <div class="chart-panel" id="baselineIncomeCard">
+                  <h4 class="chart-panel-title" id="chart2Title">Spending</h4>
+                  <div class="chart-wrapper">
+                    <canvas id="incomeChart"></canvas>
+                  </div>
+                </div>
+                <div class="chart-panel" id="baselineBalanceCard">
+                  <h4 class="chart-panel-title" id="chart1Title">Assets</h4>
+                  <div class="chart-wrapper">
+                    <canvas id="balanceChart"></canvas>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div
             class="card result-card collapsible"
-            id="mcSpendPercentileCard"
+            id="mcPercentilesCard"
             style="display: none"
           >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Spending Percentiles Over Time
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcSpendPercentileSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcSpendPercentileChart"></canvas>
+            <h3 style="margin-top: 0; margin-bottom: 10px">Percentile Graphs</h3>
+            <div class="result-body result-body-group">
+              <div class="chart-pair">
+                <div class="chart-panel" id="mcSpendPercentileCard">
+                  <h4 class="chart-panel-title">Spending</h4>
+                  <div
+                    id="mcSpendPercentileSubtitle"
+                    style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+                  ></div>
+                  <div class="chart-wrapper">
+                    <canvas id="mcSpendPercentileChart"></canvas>
+                  </div>
+                </div>
+                <div class="chart-panel" id="mcPercentileCard">
+                  <h4 class="chart-panel-title">Assets</h4>
+                  <div
+                    id="mcPercentileSubtitle"
+                    style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+                  ></div>
+                  <div class="chart-wrapper">
+                    <canvas id="mcPercentileChart"></canvas>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div
             class="card result-card collapsible"
-            id="mcPercentileCard"
+            id="mcSamplePathsCard"
             style="display: none"
           >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Asset Percentiles Over Time
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcPercentileSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcPercentileChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="card result-card collapsible"
-            id="mcSamplePathControlsCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Sample Path Pair Toggles
-            </h3>
-            <div class="result-body">
+            <h3 style="margin-top: 0; margin-bottom: 10px">Sample Path Graphs</h3>
+            <div class="result-body result-body-group">
               <div
                 id="mcSamplePathControlsSubtitle"
                 style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
               ></div>
               <div id="mcSamplePathControls"></div>
-            </div>
-          </div>
-
-          <div
-            class="card result-card collapsible"
-            id="mcSampleSpendCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Spending Sample Paths
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcSampleSpendSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcSampleSpendChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="card result-card collapsible"
-            id="mcSampleAssetCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Asset Sample Paths
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcSampleAssetSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcSampleAssetChart"></canvas>
+              <div class="chart-pair">
+                <div class="chart-panel" id="mcSampleSpendCard">
+                  <h4 class="chart-panel-title">Spending</h4>
+                  <div
+                    id="mcSampleSpendSubtitle"
+                    style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+                  ></div>
+                  <div class="chart-wrapper">
+                    <canvas id="mcSampleSpendChart"></canvas>
+                  </div>
+                </div>
+                <div class="chart-panel" id="mcSampleAssetCard">
+                  <h4 class="chart-panel-title">Assets</h4>
+                  <div
+                    id="mcSampleAssetSubtitle"
+                    style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
+                  ></div>
+                  <div class="chart-wrapper">
+                    <canvas id="mcSampleAssetChart"></canvas>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1184,24 +1174,6 @@
             </div>
           </div>
 
-          <div
-            class="card result-card collapsible"
-            id="mcOutcomeCard"
-            style="display: none"
-          >
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 1.1rem">
-              Simulation Outcome Distribution
-            </h3>
-            <div class="result-body">
-              <div
-                id="mcChartSubtitle"
-                style="font-size: 0.82rem; color: #64748b; margin-bottom: 10px"
-              ></div>
-              <div class="chart-wrapper">
-                <canvas id="mcOutcomeChart"></canvas>
-              </div>
-            </div>
-          </div>
           <div
             class="card result-card collapsible table-container"
             id="yearlyBreakdownCard"
