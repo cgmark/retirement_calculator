@@ -101,6 +101,10 @@ export async function runMonteCarlo(params) {
   const sampleAssetPaths = [];
   const sampleSpendPaths = [];
   const sampleInflationPaths = [];
+  let trialsBelowTargetSpend = 0;
+  let trialsHittingMinSpend = 0;
+  const yearsBelowTargetByTrial = [];
+  const averageSpendByTrial = [];
   const successBucketLabel = `${projectionAge}+ (Success)`;
   const bucketLabels = [
     "Before 65",
@@ -137,6 +141,10 @@ export async function runMonteCarlo(params) {
     const yearlyAssets = new Array(yearsCount).fill(0);
     const yearlySpending = new Array(yearsCount).fill(0);
     const yearlyInflationFactors = new Array(yearsCount).fill(1);
+    let yearsBelowTargetSpend = 0;
+    let hitMinSpend = false;
+    let yearlySpendTotal = 0;
+    let yearsSimulated = 0;
     const hasAdaptiveDesiredSpending =
       spendingMode === "input" &&
       !desiredSpendingBoundsError &&
@@ -185,7 +193,18 @@ export async function runMonteCarlo(params) {
             assetSensitivity,
           })
         : targetBaseSpending;
+      if (targetSpending < targetBaseSpending - 1e-6) yearsBelowTargetSpend++;
+      const currentMinSpend =
+        desiredMinSpend * inflationFactor * spendingMultiplier;
+      if (
+        hasAdaptiveDesiredSpending &&
+        desiredMinSpend < baseSpending &&
+        targetSpending <= currentMinSpend + 1e-6
+      )
+        hitMinSpend = true;
       yearlySpending[i] = targetSpending;
+      yearlySpendTotal += targetSpending;
+      yearsSimulated++;
 
       let totalIncomeTaxThisYear = 0;
       let oasClawbackThisYear = 0;
@@ -477,6 +496,12 @@ export async function runMonteCarlo(params) {
     finalEstates.push(rrsp + tfsa + nonreg);
     totalTax += thisTax;
     totalClawback += thisClawback;
+    if (yearsBelowTargetSpend > 0) trialsBelowTargetSpend++;
+    if (hitMinSpend) trialsHittingMinSpend++;
+    yearsBelowTargetByTrial.push(yearsBelowTargetSpend);
+    averageSpendByTrial.push(
+      yearsSimulated > 0 ? yearlySpendTotal / yearsSimulated : 0,
+    );
     if (
       sampleAssetPaths.length < retainedSamplePathCount &&
       t % samplePathStride === 0
@@ -535,6 +560,10 @@ export async function runMonteCarlo(params) {
       successRate: 0,
       avgTax: 0,
       avgClawback: 0,
+      pctTrialsBelowTargetSpend: 0,
+      pctTrialsHittingMinSpend: 0,
+      medianYearsBelowTargetSpend: 0,
+      medianAverageAnnualSpend: 0,
       medianFinalEstate: 0,
       p10FinalEstate: 0,
       p90FinalEstate: 0,
@@ -576,6 +605,10 @@ export async function runMonteCarlo(params) {
     successRate: successCount / completedTrials,
     avgTax: totalTax / completedTrials,
     avgClawback: totalClawback / completedTrials,
+    pctTrialsBelowTargetSpend: trialsBelowTargetSpend / completedTrials,
+    pctTrialsHittingMinSpend: trialsHittingMinSpend / completedTrials,
+    medianYearsBelowTargetSpend: percentile(yearsBelowTargetByTrial, 50),
+    medianAverageAnnualSpend: percentile(averageSpendByTrial, 50),
     medianFinalEstate: percentile(finalEstates, 50),
     p10FinalEstate: percentile(finalEstates, 10),
     p90FinalEstate: percentile(finalEstates, 90),

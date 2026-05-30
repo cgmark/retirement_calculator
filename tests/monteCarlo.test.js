@@ -50,6 +50,12 @@ describe("runMonteCarlo", () => {
     expect(res.requestedTrials).toBe(90);
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
+    expect(res.pctTrialsBelowTargetSpend).toBeGreaterThanOrEqual(0);
+    expect(res.pctTrialsBelowTargetSpend).toBeLessThanOrEqual(1);
+    expect(res.pctTrialsHittingMinSpend).toBeGreaterThanOrEqual(0);
+    expect(res.pctTrialsHittingMinSpend).toBeLessThanOrEqual(1);
+    expect(res.medianYearsBelowTargetSpend).toBeGreaterThanOrEqual(0);
+    expect(res.medianAverageAnnualSpend).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(res.bucketLabels)).toBe(true);
     expect(Array.isArray(res.ageLabels)).toBe(true);
     expect(res.ageLabels.length).toBe(92 - 65 + 1);
@@ -263,6 +269,7 @@ describe("runMonteCarlo", () => {
     );
 
     expect(assetAware.spendP50[0]).toBeLessThan(baseline.spendP50[0]);
+    expect(assetAware.pctTrialsBelowTargetSpend).toBeGreaterThan(0);
   });
 
   it("leaves rolling amortization unchanged by desired adaptive settings", async () => {
