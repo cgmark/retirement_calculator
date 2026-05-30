@@ -10,7 +10,11 @@ import {
 } from "./gis.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomShock, percentile } from "./random.js";
-import { getTargetSpendingForYear } from "./spendingPolicy.js";
+import {
+  adjustSpendingForReturn,
+  getTargetSpendingForYear,
+} from "./spendingPolicy.js";
+import { getScheduleMultiplierForAge } from "./spending.js";
 import {
   applyProportionalDraw,
   applySequenceDraw,
@@ -59,7 +63,6 @@ export async function runMonteCarlo(params) {
     mcModel = "normal",
     volatility,
     inflationVolatility,
-    badYearSpendCutPct = 0,
     seed,
     onProgress,
     shouldCancel,
@@ -68,6 +71,10 @@ export async function runMonteCarlo(params) {
     targetEstateValue = 0,
     rollingMinSpend = 0,
     rollingMaxSpend = 0,
+    desiredMinSpend = 0,
+    desiredMaxSpend = 0,
+    spendSensitivity = "medium",
+    desiredSpendingBoundsError = null,
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -128,18 +135,16 @@ export async function runMonteCarlo(params) {
     const yearlyAssets = new Array(yearsCount).fill(0);
     const yearlySpending = new Array(yearsCount).fill(0);
     const yearlyInflationFactors = new Array(yearsCount).fill(1);
+    const hasAdaptiveDesiredSpending =
+      spendingMode === "input" &&
+      !desiredSpendingBoundsError &&
+      desiredMinSpend <= baseSpending &&
+      desiredMaxSpend >= baseSpending;
 
     for (let i = 0; age + i <= projectionAge; i++) {
       const currentAge = age + i;
-      const shouldApplyBadYearCut =
-        spendingMode !== "rolling-amortization" && badYearSpendCutPct > 0;
-      const sampledGrowthForSpending = shouldApplyBadYearCut
-        ? growth + volatility * randomShock(rng, mcModel)
-        : null;
-      const spendingReductionFactor =
-        sampledGrowthForSpending !== null && sampledGrowthForSpending < 0
-          ? 1 - badYearSpendCutPct
-          : 1;
+      const sampledGrowthForSpending =
+        growth + volatility * randomShock(rng, mcModel);
       // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
       const inflationFactor = mcInflationFactor;
       yearlyInflationFactors[i] = inflationFactor;
@@ -157,7 +162,20 @@ export async function runMonteCarlo(params) {
         rollingMinSpend,
         rollingMaxSpend,
       });
-      const targetSpending = targetBaseSpending * spendingReductionFactor;
+      const spendingMultiplier = getScheduleMultiplierForAge(
+        currentAge,
+        spendingSchedule,
+      );
+      const targetSpending = hasAdaptiveDesiredSpending
+        ? adjustSpendingForReturn({
+            targetSpend: targetBaseSpending,
+            minSpend: desiredMinSpend * inflationFactor * spendingMultiplier,
+            maxSpend: desiredMaxSpend * inflationFactor * spendingMultiplier,
+            annualReturn: sampledGrowthForSpending,
+            expectedReturn: growth,
+            sensitivity: spendSensitivity,
+          })
+        : targetBaseSpending;
       yearlySpending[i] = targetSpending;
 
       let totalIncomeTaxThisYear = 0;
@@ -428,11 +446,7 @@ export async function runMonteCarlo(params) {
       }
 
       // Shock returns/inflation independently each year for this path.
-      const sampledGrowth =
-        sampledGrowthForSpending !== null
-          ? sampledGrowthForSpending
-          : growth + volatility * randomShock(rng, mcModel);
-      const yearlyGrowth = Math.max(-0.95, sampledGrowth);
+      const yearlyGrowth = Math.max(-0.95, sampledGrowthForSpending);
       const sampledInflation =
         inflation + inflationVolatility * randomShock(rng, mcModel);
       const yearlyInflation = Math.max(-0.03, Math.min(0.2, sampledInflation));

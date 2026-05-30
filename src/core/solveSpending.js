@@ -80,5 +80,19 @@ export async function solveSustainableSpending(params) {
     if (high - low <= precision) break;
   }
 
-  return best;
+  const validationTrials = Math.max(testTrials, monteCarloParams.trials || 0);
+  let validatedBest = best;
+  while (validatedBest >= 0) {
+    if (typeof shouldCancel === "function" && shouldCancel()) return null;
+    const validationResult = await runMonteCarlo({
+      ...monteCarloParams,
+      trials: validationTrials,
+      baseSpending: validatedBest,
+    });
+    if (validationResult.successRate >= targetSuccessRate) return validatedBest;
+    if (validatedBest === 0) return Number.NaN;
+    validatedBest = Math.max(0, validatedBest - precision);
+  }
+
+  return 0;
 }

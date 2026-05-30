@@ -25,7 +25,10 @@ function baseParams(overrides = {}) {
     trials: 120,
     volatility: 0.12,
     inflationVolatility: 0.01,
-    badYearSpendCutPct: 0,
+    desiredMinSpend: 50000,
+    desiredMaxSpend: 65000,
+    spendSensitivity: "medium",
+    desiredSpendingBoundsError: null,
     seed: 123,
     ...overrides,
   };
@@ -184,71 +187,100 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("applies spending cut in negative-return years", async () => {
-    const noCut = await runMonteCarlo(
+  it("adapts desired spending to annual returns", async () => {
+    const baseline = await runMonteCarlo(
       baseParams({
         trials: 80,
         seed: 888,
-        badYearSpendCutPct: 0,
+        desiredMinSpend: 55000,
+        desiredMaxSpend: 55000,
         volatility: 0.18,
       }),
     );
-    const withCut = await runMonteCarlo(
+    const adaptive = await runMonteCarlo(
       baseParams({
         trials: 80,
         seed: 888,
-        badYearSpendCutPct: 0.2,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 70000,
+        spendSensitivity: "high",
         volatility: 0.18,
       }),
     );
 
-    expect(withCut).not.toEqual(noCut);
-    expect(withCut.spendP50).not.toEqual(noCut.spendP50);
+    expect(adaptive).not.toEqual(baseline);
+    expect(adaptive.spendP50).not.toEqual(baseline.spendP50);
   });
 
-  it("ignores bad-year spending cut in rolling amortization mode", async () => {
-    const noCut = await runMonteCarlo(
+  it("falls back to plain desired spending when adaptive bounds are invalid", async () => {
+    const valid = await runMonteCarlo(
       baseParams({
-        age: 60,
-        retirementAge: 60,
-        rrspStart: 0,
-        tfsaStart: 1000000,
-        nonregStart: 0,
-        acbStart: 0,
-        projectionAge: 63,
-        baseSpending: 60000,
-        spendingMode: "rolling-amortization",
-        amortizationRate: 0.03,
-        badYearSpendCutPct: 0,
-        growth: 0.05,
+        seed: 902,
+        trials: 50,
         volatility: 0.18,
-        inflationVolatility: 0,
-        seed: 901,
-        trials: 40,
+        desiredMinSpend: 55000,
+        desiredMaxSpend: 55000,
       }),
     );
-    const withCut = await runMonteCarlo(
+    const invalid = await runMonteCarlo(
       baseParams({
-        age: 60,
-        retirementAge: 60,
-        rrspStart: 0,
-        tfsaStart: 1000000,
-        nonregStart: 0,
-        acbStart: 0,
-        projectionAge: 63,
-        baseSpending: 60000,
-        spendingMode: "rolling-amortization",
-        amortizationRate: 0.03,
-        badYearSpendCutPct: 0.2,
-        growth: 0.05,
+        seed: 902,
+        trials: 50,
         volatility: 0.18,
-        inflationVolatility: 0,
-        seed: 901,
-        trials: 40,
+        desiredMinSpend: 65000,
+        desiredMaxSpend: 70000,
+        desiredSpendingBoundsError:
+          "Min Spend must be less than or equal to Desired Net Spend/Yr.",
       }),
     );
 
-    expect(withCut).toEqual(noCut);
+    expect(invalid).toEqual(valid);
+  });
+
+  it("leaves rolling amortization unchanged by desired adaptive settings", async () => {
+    const baseline = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+      }),
+    );
+    const adaptive = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+        desiredMinSpend: 30000,
+        desiredMaxSpend: 120000,
+        spendSensitivity: "high",
+      }),
+    );
+
+    expect(adaptive).toEqual(baseline);
   });
 
   it("runs with working years and surplus contributions", async () => {

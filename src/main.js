@@ -38,6 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
     "age",
     "retirementAge",
     "spending",
+    "desiredMinSpend",
+    "desiredMaxSpend",
+    "spendSensitivity",
     "spendingMode",
     "amortizationRate",
     "targetEstateValue",
@@ -70,7 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
     "mcSamplePaths",
     "mcVolatility",
     "mcInflationVolatility",
-    "mcBadYearSpendCut",
     "mcSeed",
   ];
 
@@ -123,6 +125,9 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("nonreg", inputs.nonreg);
       setInputValueIfChanged("nonregAcb", inputs.currentAcb);
       setInputValueIfChanged("spending", inputs.baseSpending);
+      setInputValueIfChanged("desiredMinSpend", inputs.desiredMinSpend);
+      setInputValueIfChanged("desiredMaxSpend", inputs.desiredMaxSpend);
+      setInputValueIfChanged("spendSensitivity", inputs.spendSensitivity);
       setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
       setInputValueIfChanged("targetEstateValue", inputs.targetEstateValue);
       setInputValueIfChanged("rollingMinSpend", inputs.rollingMinSpend);
@@ -153,13 +158,27 @@ document.addEventListener("DOMContentLoaded", () => {
         "mcInflationVolatility",
         inputs.mcInflationVolatility * 100,
       );
-      setInputValueIfChanged(
-        "mcBadYearSpendCut",
-        inputs.mcBadYearSpendCutPct * 100,
-      );
     } finally {
       suppressInputChangeRecalc = false;
     }
+  }
+
+  function updateDesiredSpendingBoundsStatus(inputs) {
+    const statusEl = document.getElementById("desiredSpendingBoundsStatus");
+    if (!statusEl) return;
+    if (inputs?.spendingMode !== "input") {
+      statusEl.style.display = "none";
+      statusEl.innerText = "";
+      return;
+    }
+    statusEl.style.display = "block";
+    if (inputs.desiredSpendingBoundsError) {
+      statusEl.style.color = "#b91c1c";
+      statusEl.innerText = `${inputs.desiredSpendingBoundsError} Monte Carlo adaptive spending will fall back to plain desired spending until fixed.`;
+      return;
+    }
+    statusEl.style.color = "#166534";
+    statusEl.innerText = `Monte Carlo adaptive spending will target ${formatCurrency(inputs.baseSpending)} and flex between ${formatCurrency(inputs.desiredMinSpend)} and ${formatCurrency(inputs.desiredMaxSpend)} using ${inputs.spendSensitivity} sensitivity.`;
   }
 
   function saveInputs() {
@@ -933,7 +952,19 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const inputs = readScenarioInputs(document, getValidatedSpendingSchedule);
       syncInputsToForm(inputs);
+      updateDesiredSpendingBoundsStatus(inputs);
       saveInputs();
+
+      const withAdaptiveWarning = (baseText) =>
+        inputs.spendingMode === "input" && inputs.desiredSpendingBoundsError
+          ? `${baseText} Adaptive desired spending was not applied: ${inputs.desiredSpendingBoundsError}`
+          : baseText;
+
+      const setRunStatus = (color, text) => {
+        if (!runStatusEl) return;
+        runStatusEl.style.color = color;
+        runStatusEl.innerText = withAdaptiveWarning(text);
+      };
 
       setRunButtonState({ running: false });
 
@@ -1068,13 +1099,15 @@ document.addEventListener("DOMContentLoaded", () => {
       setRunButtonState({ running: false });
 
       if (outcome.shouldPromptEnableMcForSolve && runStatusEl) {
-        runStatusEl.style.color = "#b45309";
-        runStatusEl.innerText =
-          "Enable simulation to solve sustainable spending.";
+        setRunStatus(
+          "#b45309",
+          "Enable simulation to solve sustainable spending.",
+        );
       } else if (outcome.solveFailed && runStatusEl) {
-        runStatusEl.style.color = "#b45309";
-        runStatusEl.innerText =
-          "Could not solve sustainable spending: target success is unattainable even at $0 spend. Showing results for the current spend.";
+        setRunStatus(
+          "#b45309",
+          "Could not solve sustainable spending: target success is unattainable even at $0 spend. Showing results for the current spend.",
+        );
       } else if (
         outcome.enableMonteCarlo &&
         outcome.runMonteCarloNow &&
@@ -1082,23 +1115,27 @@ document.addEventListener("DOMContentLoaded", () => {
         runStatusEl
       ) {
         if (outcome.monteCarloResults.cancelled) {
-          runStatusEl.style.color = "#b45309";
-          runStatusEl.innerText = `Simulation cancelled after ${outcome.monteCarloResults.trials.toLocaleString()} / ${outcome.monteCarloResults.requestedTrials.toLocaleString()} trials.`;
+          setRunStatus(
+            "#b45309",
+            `Simulation cancelled after ${outcome.monteCarloResults.trials.toLocaleString()} / ${outcome.monteCarloResults.requestedTrials.toLocaleString()} trials.`,
+          );
         } else {
-          runStatusEl.style.color = "#166534";
-          runStatusEl.innerText = `Simulation complete: ${(outcome.monteCarloResults.successRate * 100).toFixed(1)}% success over ${outcome.monteCarloResults.trials.toLocaleString()} trials.`;
+          setRunStatus(
+            "#166534",
+            `Simulation complete: ${(outcome.monteCarloResults.successRate * 100).toFixed(1)}% success over ${outcome.monteCarloResults.trials.toLocaleString()} trials.`,
+          );
         }
       } else if (
         outcome.enableMonteCarlo &&
         !outcome.runMonteCarloNow &&
         runStatusEl
       ) {
-        runStatusEl.style.color = "#64748b";
-        runStatusEl.innerText =
-          "Simulation inputs changed. Click Run Simulation to refresh probability results.";
+        setRunStatus(
+          "#64748b",
+          "Simulation inputs changed. Click Run Simulation to refresh probability results.",
+        );
       } else if (runStatusEl) {
-        runStatusEl.style.color = "#64748b";
-        runStatusEl.innerText = "Deterministic mode ready.";
+        setRunStatus("#64748b", "Deterministic mode ready.");
       }
 
       if (outcome.solvedSpendOutput !== null) {
@@ -1300,6 +1337,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const targetEstateEl = document.getElementById("targetEstateValueGroup");
     const minSpendEl = document.getElementById("rollingMinSpendGroup");
     const maxSpendEl = document.getElementById("rollingMaxSpendGroup");
+    const desiredAdaptiveEl = document.getElementById(
+      "desiredAdaptiveSpendingGroup",
+    );
     const scheduleGroup = document.getElementById("spendingScheduleGroup");
     const scheduleWrap = document.getElementById("spendingScheduleContainer");
     const scheduleNote = document.getElementById("spendingScheduleSolveNote");
@@ -1312,6 +1352,7 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     const spendingHelp = document.getElementById("spendingModeHelp");
     const toggle = document.getElementById("spendingModeToggle");
+    const isInputMode = mode === "input";
     const isSolveMode = mode === "solve";
     const isRollingMode = mode === "rolling-amortization";
 
@@ -1329,6 +1370,8 @@ document.addEventListener("DOMContentLoaded", () => {
       targetEstateEl.style.display = isRollingMode ? "block" : "none";
     if (minSpendEl) minSpendEl.style.display = isRollingMode ? "block" : "none";
     if (maxSpendEl) maxSpendEl.style.display = isRollingMode ? "block" : "none";
+    if (desiredAdaptiveEl)
+      desiredAdaptiveEl.style.display = isInputMode ? "block" : "none";
     if (scheduleGroup) scheduleGroup.style.display = "block";
     if (scheduleWrap)
       scheduleWrap.style.display = isSolveMode ? "none" : "block";
@@ -1358,7 +1401,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "Solves a flat spend to hit your simulation success target."
         : isRollingMode
           ? "Recomputes annual spend from remaining assets, remaining years, amortization rate, and target estate value, then applies your min/max spend bounds. Simulation negative-return spending cuts are ignored in this mode."
-          : "Uses your entered spend.";
+          : "Uses your entered spend as the target. Monte Carlo can flex spending between your min/max bounds based on annual returns.";
+    if (!isInputMode) updateDesiredSpendingBoundsStatus({ spendingMode: mode });
     if (scheduleNote)
       scheduleNote.innerText =
         "Age adjustments are ignored in sustainable mode because the solver uses one flat annual spend.";
@@ -1573,7 +1617,6 @@ document.addEventListener("DOMContentLoaded", () => {
         `Avg lifetime tax / clawback: ${formatCurrency(monteCarloResults.avgTax)} / ${formatCurrency(monteCarloResults.avgClawback)}`,
         `Last run: ${runAt}`,
         `Settings used (model / trials / return vol / inflation vol / seed): ${monteCarloMeta?.model === "fat-tail" ? "Fat-tail MC" : "Normal MC"} / ${(monteCarloMeta?.trials ?? monteCarloResults.trials).toLocaleString()} / ${((monteCarloMeta?.returnVolatility ?? 0) * 100).toFixed(1)}% / ${((monteCarloMeta?.inflationVolatility ?? 0) * 100).toFixed(1)}% / ${seedText}`,
-        `Bad-year spending cut: ${((monteCarloMeta?.badYearSpendCutPct ?? 0) * 100).toFixed(1)}%`,
         `Sample paths shown: ${monteCarloMeta?.samplePathCount ?? monteCarloResults.sampleAssetPaths?.length ?? 0}`,
         solvedLine,
         partialLine,
