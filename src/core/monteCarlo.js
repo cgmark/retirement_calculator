@@ -10,7 +10,11 @@ import {
 } from "./gis.js";
 import { getRrifMinimumRate } from "./rrif.js";
 import { createSeededRng, randomShock, percentile } from "./random.js";
-import { getTargetSpendingForYear } from "./spendingPolicy.js";
+import {
+  adjustSpendingForReturn,
+  getTargetSpendingForYear,
+} from "./spendingPolicy.js";
+import { getScheduleMultiplierForAge } from "./spending.js";
 import {
   applyProportionalDraw,
   applySequenceDraw,
@@ -59,7 +63,6 @@ export async function runMonteCarlo(params) {
     mcModel = "normal",
     volatility,
     inflationVolatility,
-    badYearSpendCutPct = 0,
     seed,
     onProgress,
     shouldCancel,
@@ -68,6 +71,12 @@ export async function runMonteCarlo(params) {
     targetEstateValue = 0,
     rollingMinSpend = 0,
     rollingMaxSpend = 0,
+    desiredMinSpend = 0,
+    desiredMaxSpend = 0,
+    spendSensitivity = "medium",
+    assetSensitivity = "off",
+    desiredSpendingBoundsError = null,
+    baselineStartAssetsByYear = [],
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -92,6 +101,10 @@ export async function runMonteCarlo(params) {
   const sampleAssetPaths = [];
   const sampleSpendPaths = [];
   const sampleInflationPaths = [];
+  let trialsBelowTargetSpend = 0;
+  let trialsHittingMinSpend = 0;
+  const yearsBelowTargetByTrial = [];
+  const averageSpendByTrial = [];
   const successBucketLabel = `${projectionAge}+ (Success)`;
   const bucketLabels = [
     "Before 65",
@@ -128,18 +141,20 @@ export async function runMonteCarlo(params) {
     const yearlyAssets = new Array(yearsCount).fill(0);
     const yearlySpending = new Array(yearsCount).fill(0);
     const yearlyInflationFactors = new Array(yearsCount).fill(1);
+    let yearsBelowTargetSpend = 0;
+    let hitMinSpend = false;
+    let yearlySpendTotal = 0;
+    let yearsSimulated = 0;
+    const hasAdaptiveDesiredSpending =
+      spendingMode === "input" &&
+      !desiredSpendingBoundsError &&
+      desiredMinSpend <= baseSpending &&
+      desiredMaxSpend >= baseSpending;
 
     for (let i = 0; age + i <= projectionAge; i++) {
       const currentAge = age + i;
-      const shouldApplyBadYearCut =
-        spendingMode !== "rolling-amortization" && badYearSpendCutPct > 0;
-      const sampledGrowthForSpending = shouldApplyBadYearCut
-        ? growth + volatility * randomShock(rng, mcModel)
-        : null;
-      const spendingReductionFactor =
-        sampledGrowthForSpending !== null && sampledGrowthForSpending < 0
-          ? 1 - badYearSpendCutPct
-          : 1;
+      const sampledGrowthForSpending =
+        growth + volatility * randomShock(rng, mcModel);
       // In MC runs, inflation is path-dependent (not a fixed deterministic curve).
       const inflationFactor = mcInflationFactor;
       yearlyInflationFactors[i] = inflationFactor;
@@ -157,8 +172,39 @@ export async function runMonteCarlo(params) {
         rollingMinSpend,
         rollingMaxSpend,
       });
-      const targetSpending = targetBaseSpending * spendingReductionFactor;
+      const spendingMultiplier = getScheduleMultiplierForAge(
+        currentAge,
+        spendingSchedule,
+      );
+      const baselineAssets = baselineStartAssetsByYear[i];
+      const assetDeviation =
+        Number.isFinite(baselineAssets) && baselineAssets > 0
+          ? startingTotalPortfolio / baselineAssets - 1
+          : 0;
+      const targetSpending = hasAdaptiveDesiredSpending
+        ? adjustSpendingForReturn({
+            targetSpend: targetBaseSpending,
+            minSpend: desiredMinSpend * inflationFactor * spendingMultiplier,
+            maxSpend: desiredMaxSpend * inflationFactor * spendingMultiplier,
+            annualReturn: sampledGrowthForSpending,
+            expectedReturn: growth,
+            sensitivity: spendSensitivity,
+            assetDeviation,
+            assetSensitivity,
+          })
+        : targetBaseSpending;
+      if (targetSpending < targetBaseSpending - 1e-6) yearsBelowTargetSpend++;
+      const currentMinSpend =
+        desiredMinSpend * inflationFactor * spendingMultiplier;
+      if (
+        hasAdaptiveDesiredSpending &&
+        desiredMinSpend < baseSpending &&
+        targetSpending <= currentMinSpend + 1e-6
+      )
+        hitMinSpend = true;
       yearlySpending[i] = targetSpending;
+      yearlySpendTotal += targetSpending;
+      yearsSimulated++;
 
       let totalIncomeTaxThisYear = 0;
       let oasClawbackThisYear = 0;
@@ -428,11 +474,7 @@ export async function runMonteCarlo(params) {
       }
 
       // Shock returns/inflation independently each year for this path.
-      const sampledGrowth =
-        sampledGrowthForSpending !== null
-          ? sampledGrowthForSpending
-          : growth + volatility * randomShock(rng, mcModel);
-      const yearlyGrowth = Math.max(-0.95, sampledGrowth);
+      const yearlyGrowth = Math.max(-0.95, sampledGrowthForSpending);
       const sampledInflation =
         inflation + inflationVolatility * randomShock(rng, mcModel);
       const yearlyInflation = Math.max(-0.03, Math.min(0.2, sampledInflation));
@@ -454,6 +496,12 @@ export async function runMonteCarlo(params) {
     finalEstates.push(rrsp + tfsa + nonreg);
     totalTax += thisTax;
     totalClawback += thisClawback;
+    if (yearsBelowTargetSpend > 0) trialsBelowTargetSpend++;
+    if (hitMinSpend) trialsHittingMinSpend++;
+    yearsBelowTargetByTrial.push(yearsBelowTargetSpend);
+    averageSpendByTrial.push(
+      yearsSimulated > 0 ? yearlySpendTotal / yearsSimulated : 0,
+    );
     if (
       sampleAssetPaths.length < retainedSamplePathCount &&
       t % samplePathStride === 0
@@ -512,6 +560,10 @@ export async function runMonteCarlo(params) {
       successRate: 0,
       avgTax: 0,
       avgClawback: 0,
+      pctTrialsBelowTargetSpend: 0,
+      pctTrialsHittingMinSpend: 0,
+      medianYearsBelowTargetSpend: 0,
+      medianAverageAnnualSpend: 0,
       medianFinalEstate: 0,
       p10FinalEstate: 0,
       p90FinalEstate: 0,
@@ -553,6 +605,10 @@ export async function runMonteCarlo(params) {
     successRate: successCount / completedTrials,
     avgTax: totalTax / completedTrials,
     avgClawback: totalClawback / completedTrials,
+    pctTrialsBelowTargetSpend: trialsBelowTargetSpend / completedTrials,
+    pctTrialsHittingMinSpend: trialsHittingMinSpend / completedTrials,
+    medianYearsBelowTargetSpend: percentile(yearsBelowTargetByTrial, 50),
+    medianAverageAnnualSpend: percentile(averageSpendByTrial, 50),
     medianFinalEstate: percentile(finalEstates, 50),
     p10FinalEstate: percentile(finalEstates, 10),
     p90FinalEstate: percentile(finalEstates, 90),

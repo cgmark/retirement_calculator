@@ -10,6 +10,10 @@ function buildDoc(overrides = {}) {
     nonreg: "",
     nonregAcb: "",
     spending: "",
+    desiredMinSpend: "",
+    desiredMaxSpend: "",
+    spendSensitivity: "medium",
+    assetSensitivity: "off",
     spendingMode: "input",
     amortizationRate: "",
     targetEstateValue: "",
@@ -37,7 +41,6 @@ function buildDoc(overrides = {}) {
     mcTrials: "",
     mcVolatility: "",
     mcInflationVolatility: "",
-    mcBadYearSpendCut: "",
     mcSeed: "",
     ...overrides,
   };
@@ -63,6 +66,11 @@ describe("readScenarioInputs", () => {
     expect(inputs.nonreg).toBe(0);
     expect(inputs.currentAcb).toBe(0);
     expect(inputs.baseSpending).toBe(60000);
+    expect(inputs.desiredMinSpend).toBe(50000);
+    expect(inputs.desiredMaxSpend).toBe(70000);
+    expect(inputs.spendSensitivity).toBe("medium");
+    expect(inputs.assetSensitivity).toBe("off");
+    expect(inputs.desiredSpendingBoundsError).toBeNull();
     expect(inputs.amortizationRate).toBe(0.03);
     expect(inputs.targetEstateValue).toBe(0);
     expect(inputs.rollingMinSpend).toBe(0);
@@ -130,5 +138,22 @@ describe("readScenarioInputs", () => {
 
     expect(inputs.rollingMinSpend).toBe(55000);
     expect(inputs.rollingMaxSpend).toBe(55000);
+  });
+
+  it("preserves desired min/max inputs and reports invalid bounds", () => {
+    const inputs = readScenarioInputs(
+      buildDoc({
+        spending: "60000",
+        desiredMinSpend: "65000",
+        desiredMaxSpend: "70000",
+      }),
+      () => [],
+    );
+
+    expect(inputs.desiredMinSpend).toBe(65000);
+    expect(inputs.desiredMaxSpend).toBe(70000);
+    expect(inputs.desiredSpendingBoundsError).toBe(
+      "Min Spend must be less than or equal to Desired Net Spend/Yr.",
+    );
   });
 });

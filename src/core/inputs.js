@@ -1,3 +1,9 @@
+import {
+  getAdaptiveSpendingValidationError,
+  normalizeAdaptiveSpendingSensitivity,
+  normalizeAssetSensitivity,
+} from "./spendingPolicy.js";
+
 export const SCENARIO_INPUT_DEFAULTS = {
   age: 60,
   retirementAge: null,
@@ -5,6 +11,10 @@ export const SCENARIO_INPUT_DEFAULTS = {
   tfsa: 0,
   nonreg: 0,
   baseSpending: 60000,
+  desiredMinSpend: 50000,
+  desiredMaxSpend: 70000,
+  spendSensitivity: "medium",
+  assetSensitivity: "off",
   targetSuccessPct: 90,
   solvePrecision: 100,
   lifeExpectancy: 100,
@@ -25,7 +35,6 @@ export const SCENARIO_INPUT_DEFAULTS = {
   mcModel: "normal",
   mcVolatilityPct: 0,
   mcInflationVolatilityPct: 0,
-  mcBadYearSpendCutPct: 0,
 };
 
 export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
@@ -55,6 +64,27 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     0,
     readFloat("spending", SCENARIO_INPUT_DEFAULTS.baseSpending),
   );
+  const desiredMinSpend = readFloat(
+    "desiredMinSpend",
+    SCENARIO_INPUT_DEFAULTS.desiredMinSpend,
+  );
+  const desiredMaxSpend = readFloat(
+    "desiredMaxSpend",
+    SCENARIO_INPUT_DEFAULTS.desiredMaxSpend,
+  );
+  const spendSensitivity = normalizeAdaptiveSpendingSensitivity(
+    doc.getElementById("spendSensitivity")?.value ||
+      SCENARIO_INPUT_DEFAULTS.spendSensitivity,
+  );
+  const assetSensitivity = normalizeAssetSensitivity(
+    doc.getElementById("assetSensitivity")?.value ||
+      SCENARIO_INPUT_DEFAULTS.assetSensitivity,
+  );
+  const desiredSpendingBoundsError = getAdaptiveSpendingValidationError({
+    targetSpend: baseSpending,
+    minSpend: desiredMinSpend,
+    maxSpend: desiredMaxSpend,
+  });
   const spendingSchedule = getValidatedSpendingSchedule();
   const spendingMode = doc.getElementById("spendingMode").value;
   const amortizationRate =
@@ -159,16 +189,6 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
       SCENARIO_INPUT_DEFAULTS.mcInflationVolatilityPct,
     ) / 100,
   );
-  const mcBadYearSpendCutPct = Math.max(
-    0,
-    Math.min(
-      1,
-      readFloat(
-        "mcBadYearSpendCut",
-        SCENARIO_INPUT_DEFAULTS.mcBadYearSpendCutPct,
-      ) / 100,
-    ),
-  );
   const mcSeedRaw = doc.getElementById("mcSeed").value;
   const mcSeed = mcSeedRaw === "" ? NaN : parseInt(mcSeedRaw);
 
@@ -183,6 +203,11 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     nonreg,
     currentAcb,
     baseSpending,
+    desiredMinSpend,
+    desiredMaxSpend,
+    spendSensitivity,
+    assetSensitivity,
+    desiredSpendingBoundsError,
     spendingSchedule,
     spendingMode,
     amortizationRate,
@@ -210,7 +235,6 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     mcSamplePaths,
     mcVolatility,
     mcInflationVolatility,
-    mcBadYearSpendCutPct,
     mcSeed,
   };
 }

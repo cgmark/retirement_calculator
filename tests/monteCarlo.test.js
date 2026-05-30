@@ -25,7 +25,10 @@ function baseParams(overrides = {}) {
     trials: 120,
     volatility: 0.12,
     inflationVolatility: 0.01,
-    badYearSpendCutPct: 0,
+    desiredMinSpend: 50000,
+    desiredMaxSpend: 65000,
+    spendSensitivity: "medium",
+    desiredSpendingBoundsError: null,
     seed: 123,
     ...overrides,
   };
@@ -47,6 +50,12 @@ describe("runMonteCarlo", () => {
     expect(res.requestedTrials).toBe(90);
     expect(res.successRate).toBeGreaterThanOrEqual(0);
     expect(res.successRate).toBeLessThanOrEqual(1);
+    expect(res.pctTrialsBelowTargetSpend).toBeGreaterThanOrEqual(0);
+    expect(res.pctTrialsBelowTargetSpend).toBeLessThanOrEqual(1);
+    expect(res.pctTrialsHittingMinSpend).toBeGreaterThanOrEqual(0);
+    expect(res.pctTrialsHittingMinSpend).toBeLessThanOrEqual(1);
+    expect(res.medianYearsBelowTargetSpend).toBeGreaterThanOrEqual(0);
+    expect(res.medianAverageAnnualSpend).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(res.bucketLabels)).toBe(true);
     expect(Array.isArray(res.ageLabels)).toBe(true);
     expect(res.ageLabels.length).toBe(92 - 65 + 1);
@@ -184,71 +193,129 @@ describe("runMonteCarlo", () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
   });
 
-  it("applies spending cut in negative-return years", async () => {
-    const noCut = await runMonteCarlo(
+  it("adapts desired spending to annual returns", async () => {
+    const baseline = await runMonteCarlo(
       baseParams({
         trials: 80,
         seed: 888,
-        badYearSpendCutPct: 0,
+        desiredMinSpend: 55000,
+        desiredMaxSpend: 55000,
         volatility: 0.18,
       }),
     );
-    const withCut = await runMonteCarlo(
+    const adaptive = await runMonteCarlo(
       baseParams({
         trials: 80,
         seed: 888,
-        badYearSpendCutPct: 0.2,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 70000,
+        spendSensitivity: "high",
         volatility: 0.18,
       }),
     );
 
-    expect(withCut).not.toEqual(noCut);
-    expect(withCut.spendP50).not.toEqual(noCut.spendP50);
+    expect(adaptive).not.toEqual(baseline);
+    expect(adaptive.spendP50).not.toEqual(baseline.spendP50);
   });
 
-  it("ignores bad-year spending cut in rolling amortization mode", async () => {
-    const noCut = await runMonteCarlo(
+  it("falls back to plain desired spending when adaptive bounds are invalid", async () => {
+    const valid = await runMonteCarlo(
       baseParams({
-        age: 60,
-        retirementAge: 60,
-        rrspStart: 0,
-        tfsaStart: 1000000,
-        nonregStart: 0,
-        acbStart: 0,
-        projectionAge: 63,
-        baseSpending: 60000,
-        spendingMode: "rolling-amortization",
-        amortizationRate: 0.03,
-        badYearSpendCutPct: 0,
-        growth: 0.05,
+        seed: 902,
+        trials: 50,
         volatility: 0.18,
-        inflationVolatility: 0,
-        seed: 901,
-        trials: 40,
+        desiredMinSpend: 55000,
+        desiredMaxSpend: 55000,
       }),
     );
-    const withCut = await runMonteCarlo(
+    const invalid = await runMonteCarlo(
       baseParams({
-        age: 60,
-        retirementAge: 60,
-        rrspStart: 0,
-        tfsaStart: 1000000,
-        nonregStart: 0,
-        acbStart: 0,
-        projectionAge: 63,
-        baseSpending: 60000,
-        spendingMode: "rolling-amortization",
-        amortizationRate: 0.03,
-        badYearSpendCutPct: 0.2,
-        growth: 0.05,
+        seed: 902,
+        trials: 50,
         volatility: 0.18,
-        inflationVolatility: 0,
-        seed: 901,
-        trials: 40,
+        desiredMinSpend: 65000,
+        desiredMaxSpend: 70000,
+        desiredSpendingBoundsError:
+          "Min Spend must be less than or equal to Desired Net Spend/Yr.",
       }),
     );
 
-    expect(withCut).toEqual(noCut);
+    expect(invalid).toEqual(valid);
+  });
+
+  it("uses baseline asset sensitivity to push spending toward the floor", async () => {
+    const years = 92 - 65 + 1;
+    const baseline = await runMonteCarlo(
+      baseParams({
+        trials: 20,
+        volatility: 0,
+        growth: 0.05,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 65000,
+        assetSensitivity: "off",
+        baselineStartAssetsByYear: new Array(years).fill(720000),
+      }),
+    );
+    const assetAware = await runMonteCarlo(
+      baseParams({
+        trials: 20,
+        volatility: 0,
+        growth: 0.05,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 65000,
+        assetSensitivity: "medium",
+        baselineStartAssetsByYear: new Array(years).fill(800000),
+      }),
+    );
+
+    expect(assetAware.spendP50[0]).toBeLessThan(baseline.spendP50[0]);
+    expect(assetAware.pctTrialsBelowTargetSpend).toBeGreaterThan(0);
+  });
+
+  it("leaves rolling amortization unchanged by desired adaptive settings", async () => {
+    const baseline = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+      }),
+    );
+    const adaptive = await runMonteCarlo(
+      baseParams({
+        age: 60,
+        retirementAge: 60,
+        rrspStart: 0,
+        tfsaStart: 1000000,
+        nonregStart: 0,
+        acbStart: 0,
+        projectionAge: 63,
+        baseSpending: 60000,
+        spendingMode: "rolling-amortization",
+        amortizationRate: 0.03,
+        growth: 0.05,
+        volatility: 0.18,
+        inflationVolatility: 0,
+        seed: 901,
+        trials: 40,
+        desiredMinSpend: 30000,
+        desiredMaxSpend: 120000,
+        spendSensitivity: "high",
+      }),
+    );
+
+    expect(adaptive).toEqual(baseline);
   });
 
   it("runs with working years and surplus contributions", async () => {
