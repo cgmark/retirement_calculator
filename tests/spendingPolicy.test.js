@@ -140,6 +140,51 @@ describe("spending policy helpers", () => {
     expect(target).toBe(110000);
   });
 
+  it("cuts desired spending faster when assets are below the baseline path", () => {
+    const target = adjustSpendingForReturn({
+      targetSpend: 100000,
+      minSpend: 80000,
+      maxSpend: 120000,
+      annualReturn: 0.05,
+      expectedReturn: 0.05,
+      assetDeviation: -0.05,
+      assetSensitivity: "high",
+      sensitivity: "medium",
+    });
+
+    expect(target).toBe(80000);
+  });
+
+  it("raises desired spending more slowly when assets are above the baseline path", () => {
+    const target = adjustSpendingForReturn({
+      targetSpend: 100000,
+      minSpend: 80000,
+      maxSpend: 120000,
+      annualReturn: 0.05,
+      expectedReturn: 0.05,
+      assetDeviation: 0.075,
+      assetSensitivity: "medium",
+      sensitivity: "medium",
+    });
+
+    expect(target).toBe(107500);
+  });
+
+  it("allows asset sensitivity to work without return sensitivity", () => {
+    const target = adjustSpendingForReturn({
+      targetSpend: 100000,
+      minSpend: 80000,
+      maxSpend: 120000,
+      annualReturn: 0.05,
+      expectedReturn: 0.05,
+      sensitivity: "off",
+      assetDeviation: -0.05,
+      assetSensitivity: "high",
+    });
+
+    expect(target).toBe(80000);
+  });
+
   it("reports invalid desired min/max bounds without rewriting them", () => {
     expect(
       getAdaptiveSpendingValidationError({

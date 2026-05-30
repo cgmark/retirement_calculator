@@ -13,6 +13,7 @@ function buildDoc(overrides = {}) {
     desiredMinSpend: "",
     desiredMaxSpend: "",
     spendSensitivity: "medium",
+    assetSensitivity: "off",
     spendingMode: "input",
     amortizationRate: "",
     targetEstateValue: "",
@@ -68,6 +69,7 @@ describe("readScenarioInputs", () => {
     expect(inputs.desiredMinSpend).toBe(50000);
     expect(inputs.desiredMaxSpend).toBe(70000);
     expect(inputs.spendSensitivity).toBe("medium");
+    expect(inputs.assetSensitivity).toBe("off");
     expect(inputs.desiredSpendingBoundsError).toBeNull();
     expect(inputs.amortizationRate).toBe(0.03);
     expect(inputs.targetEstateValue).toBe(0);

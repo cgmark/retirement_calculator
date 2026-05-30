@@ -31,6 +31,7 @@ export async function runRetirementCalculation(params) {
     desiredMinSpend,
     desiredMaxSpend,
     spendSensitivity,
+    assetSensitivity,
     desiredSpendingBoundsError,
     targetSuccessRate,
     solvePrecision,
@@ -59,6 +60,17 @@ export async function runRetirementCalculation(params) {
   let solvedSpendOutput = null;
   let shouldPromptEnableMcForSolve = false;
   let solveFailed = false;
+  const startingPortfolio = rrsp + tfsa + nonreg;
+
+  const buildBaselineStartAssetsByYear = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const yearlyGrowth = 1 + Math.max(-0.95, growth);
+    const baseline = [startingPortfolio];
+    for (let i = 1; i < rows.length; i++) {
+      baseline.push(Math.max(0, rows[i - 1].total) * yearlyGrowth);
+    }
+    return baseline;
+  };
 
   // Optional pre-pass: solve for a flat spend that meets target MC success rate.
   if (spendingMode === "solve") {
@@ -106,6 +118,7 @@ export async function runRetirementCalculation(params) {
           desiredMinSpend,
           desiredMaxSpend,
           spendSensitivity,
+          assetSensitivity,
           desiredSpendingBoundsError,
           seed: mcSeed,
           shouldCancel,
@@ -186,6 +199,7 @@ export async function runRetirementCalculation(params) {
       effectiveStrategy,
       disableRetirementCredits: true,
     });
+  const baselineStartAssetsByYear = buildBaselineStartAssetsByYear(results);
 
   let monteCarloResults = null;
   let monteCarloStale = false;
@@ -229,7 +243,9 @@ export async function runRetirementCalculation(params) {
       desiredMinSpend,
       desiredMaxSpend,
       spendSensitivity,
+      assetSensitivity,
       desiredSpendingBoundsError,
+      baselineStartAssetsByYear,
       seed: mcSeed,
       onProgress: onMonteCarloProgress,
       shouldCancel,

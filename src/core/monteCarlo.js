@@ -74,7 +74,9 @@ export async function runMonteCarlo(params) {
     desiredMinSpend = 0,
     desiredMaxSpend = 0,
     spendSensitivity = "medium",
+    assetSensitivity = "off",
     desiredSpendingBoundsError = null,
+    baselineStartAssetsByYear = [],
   } = params;
 
   // Seeded path is used for reproducible analysis/tests; otherwise use ambient randomness.
@@ -166,6 +168,11 @@ export async function runMonteCarlo(params) {
         currentAge,
         spendingSchedule,
       );
+      const baselineAssets = baselineStartAssetsByYear[i];
+      const assetDeviation =
+        Number.isFinite(baselineAssets) && baselineAssets > 0
+          ? startingTotalPortfolio / baselineAssets - 1
+          : 0;
       const targetSpending = hasAdaptiveDesiredSpending
         ? adjustSpendingForReturn({
             targetSpend: targetBaseSpending,
@@ -174,6 +181,8 @@ export async function runMonteCarlo(params) {
             annualReturn: sampledGrowthForSpending,
             expectedReturn: growth,
             sensitivity: spendSensitivity,
+            assetDeviation,
+            assetSensitivity,
           })
         : targetBaseSpending;
       yearlySpending[i] = targetSpending;

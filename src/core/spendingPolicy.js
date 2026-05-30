@@ -4,15 +4,35 @@ import {
 } from "./spending.js";
 
 export const ADAPTIVE_SPENDING_THRESHOLDS = {
+  off: null,
   low: { minReturn: -0.25, maxReturn: 0.2 },
   medium: { minReturn: -0.15, maxReturn: 0.15 },
   high: { minReturn: -0.1, maxReturn: 0.1 },
+};
+
+export const ASSET_SENSITIVITY_THRESHOLDS = {
+  off: null,
+  low: { minDeviation: -0.15, maxDeviation: 0.25 },
+  medium: { minDeviation: -0.1, maxDeviation: 0.2 },
+  high: { minDeviation: -0.05, maxDeviation: 0.15 },
 };
 
 export function normalizeAdaptiveSpendingSensitivity(sensitivity = "medium") {
   return Object.hasOwn(ADAPTIVE_SPENDING_THRESHOLDS, sensitivity)
     ? sensitivity
     : "medium";
+}
+
+export function normalizeAssetSensitivity(sensitivity = "off") {
+  return Object.hasOwn(ASSET_SENSITIVITY_THRESHOLDS, sensitivity)
+    ? sensitivity
+    : "off";
+}
+
+function getSignalFromThresholds(value, negativeThreshold, positiveThreshold) {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  if (value < 0) return -Math.min(1, value / negativeThreshold);
+  return Math.min(1, value / positiveThreshold);
 }
 
 export function getAdaptiveSpendingValidationError({
@@ -38,6 +58,8 @@ export function adjustSpendingForReturn({
   annualReturn,
   expectedReturn = 0,
   sensitivity = "medium",
+  assetDeviation = 0,
+  assetSensitivity = "off",
 }) {
   if (!Number.isFinite(targetSpend)) return 0;
   const floor = Number.isFinite(minSpend) ? minSpend : targetSpend;
@@ -49,21 +71,38 @@ export function adjustSpendingForReturn({
     ADAPTIVE_SPENDING_THRESHOLDS[
       normalizeAdaptiveSpendingSensitivity(sensitivity)
     ];
+  const normalizedAssetSensitivity =
+    normalizeAssetSensitivity(assetSensitivity);
+  const assetThresholds =
+    normalizedAssetSensitivity === "off"
+      ? null
+      : ASSET_SENSITIVITY_THRESHOLDS[normalizedAssetSensitivity];
 
   const returnGap = annualReturn - expectedReturn;
-  if (returnGap === 0) return targetSpend;
-
-  if (returnGap < 0) {
+  const returnSignal = thresholds
+    ? getSignalFromThresholds(
+        returnGap,
+        thresholds.minReturn,
+        thresholds.maxReturn,
+      )
+    : 0;
+  const assetSignal = assetThresholds
+    ? getSignalFromThresholds(
+        assetDeviation,
+        assetThresholds.minDeviation,
+        assetThresholds.maxDeviation,
+      )
+    : 0;
+  const combinedSignal = Math.max(-1, Math.min(1, returnSignal + assetSignal));
+  if (combinedSignal <= 0) {
     const distance = targetSpend - floor;
     if (distance <= 0) return floor;
-    const cutProgress = Math.min(1, returnGap / thresholds.minReturn);
-    return targetSpend - distance * cutProgress;
+    return targetSpend + distance * combinedSignal;
   }
 
   const distance = ceiling - targetSpend;
   if (distance <= 0) return ceiling;
-  const increaseProgress = Math.min(1, returnGap / thresholds.maxReturn);
-  return targetSpend + distance * increaseProgress;
+  return targetSpend + distance * combinedSignal;
 }
 
 export function calculateAmortizedPayment(

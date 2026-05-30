@@ -41,6 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "desiredMinSpend",
     "desiredMaxSpend",
     "spendSensitivity",
+    "assetSensitivity",
     "spendingMode",
     "amortizationRate",
     "targetEstateValue",
@@ -128,6 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setInputValueIfChanged("desiredMinSpend", inputs.desiredMinSpend);
       setInputValueIfChanged("desiredMaxSpend", inputs.desiredMaxSpend);
       setInputValueIfChanged("spendSensitivity", inputs.spendSensitivity);
+      setInputValueIfChanged("assetSensitivity", inputs.assetSensitivity);
       setInputValueIfChanged("amortizationRate", inputs.amortizationRate * 100);
       setInputValueIfChanged("targetEstateValue", inputs.targetEstateValue);
       setInputValueIfChanged("rollingMinSpend", inputs.rollingMinSpend);
@@ -178,7 +180,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     statusEl.style.color = "#166534";
-    statusEl.innerText = `Monte Carlo adaptive spending will target ${formatCurrency(inputs.baseSpending)} and flex between ${formatCurrency(inputs.desiredMinSpend)} and ${formatCurrency(inputs.desiredMaxSpend)} using ${inputs.spendSensitivity} sensitivity.`;
+    const assetSensitivityText =
+      inputs.assetSensitivity === "off"
+        ? "no baseline-asset adjustment"
+        : `${inputs.assetSensitivity} baseline-asset sensitivity`;
+    statusEl.innerText = `Monte Carlo adaptive spending will target ${formatCurrency(inputs.baseSpending)} and flex between ${formatCurrency(inputs.desiredMinSpend)} and ${formatCurrency(inputs.desiredMaxSpend)} using ${inputs.spendSensitivity} return sensitivity and ${assetSensitivityText}.`;
   }
 
   function saveInputs() {

@@ -237,6 +237,34 @@ describe("runMonteCarlo", () => {
     expect(invalid).toEqual(valid);
   });
 
+  it("uses baseline asset sensitivity to push spending toward the floor", async () => {
+    const years = 92 - 65 + 1;
+    const baseline = await runMonteCarlo(
+      baseParams({
+        trials: 20,
+        volatility: 0,
+        growth: 0.05,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 65000,
+        assetSensitivity: "off",
+        baselineStartAssetsByYear: new Array(years).fill(720000),
+      }),
+    );
+    const assetAware = await runMonteCarlo(
+      baseParams({
+        trials: 20,
+        volatility: 0,
+        growth: 0.05,
+        desiredMinSpend: 45000,
+        desiredMaxSpend: 65000,
+        assetSensitivity: "medium",
+        baselineStartAssetsByYear: new Array(years).fill(800000),
+      }),
+    );
+
+    expect(assetAware.spendP50[0]).toBeLessThan(baseline.spendP50[0]);
+  });
+
   it("leaves rolling amortization unchanged by desired adaptive settings", async () => {
     const baseline = await runMonteCarlo(
       baseParams({

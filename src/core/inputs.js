@@ -1,6 +1,7 @@
 import {
   getAdaptiveSpendingValidationError,
   normalizeAdaptiveSpendingSensitivity,
+  normalizeAssetSensitivity,
 } from "./spendingPolicy.js";
 
 export const SCENARIO_INPUT_DEFAULTS = {
@@ -13,6 +14,7 @@ export const SCENARIO_INPUT_DEFAULTS = {
   desiredMinSpend: 50000,
   desiredMaxSpend: 70000,
   spendSensitivity: "medium",
+  assetSensitivity: "off",
   targetSuccessPct: 90,
   solvePrecision: 100,
   lifeExpectancy: 100,
@@ -73,6 +75,10 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
   const spendSensitivity = normalizeAdaptiveSpendingSensitivity(
     doc.getElementById("spendSensitivity")?.value ||
       SCENARIO_INPUT_DEFAULTS.spendSensitivity,
+  );
+  const assetSensitivity = normalizeAssetSensitivity(
+    doc.getElementById("assetSensitivity")?.value ||
+      SCENARIO_INPUT_DEFAULTS.assetSensitivity,
   );
   const desiredSpendingBoundsError = getAdaptiveSpendingValidationError({
     targetSpend: baseSpending,
@@ -200,6 +206,7 @@ export function readScenarioInputs(doc, getValidatedSpendingSchedule) {
     desiredMinSpend,
     desiredMaxSpend,
     spendSensitivity,
+    assetSensitivity,
     desiredSpendingBoundsError,
     spendingSchedule,
     spendingMode,
